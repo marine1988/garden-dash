@@ -77,6 +77,21 @@ uint8_t configStep = 0;
 char pinInput[5] = "";
 DashboardCustomization dashboardCustomizations[MODE_COUNT] = {};
 DashboardAppearanceMode dashboardAppearanceMode = DASH_APPEARANCE_DARK;
+
+// Cruise control, applied by the VESC backend from the telemetry task. The
+// defaults are deliberately conservative: off, a five-second hold to engage, a
+// 5-25 km/h window and only the two gentler ride modes, so nothing engages by
+// accident on first boot. Bit (1 << (mode-1)) in the mask; 0 would allow every
+// mode, which is not what a fresh display should choose.
+bool cruiseControlEnabled = false;
+uint16_t cruiseHoldTimeDeciS = 50;
+uint16_t cruiseMinSpeedKmh = 5;
+uint16_t cruiseMaxSpeedKmh = 25;
+uint16_t cruiseDeadbandHundredths = 2;
+uint8_t cruiseAllowedModes = (1u << 0) | (1u << 1);
+
+ControllerProfile controllerProfiles[kControllerProfileCount] = {};
+uint8_t activeControllerProfile = 0xFF;
 static bool autoAppearanceLight = false;
 static DashboardMode accentRenderMode = MODE_HUD;
 
@@ -92,6 +107,11 @@ static constexpr const char *kMotorDataProfileRevisionKey = "effortRev";
 // otherwise apply stale prototype-era choices to a newly flashed layout.
 static constexpr uint8_t kBarGraphProfileRevision = 1;
 static constexpr const char *kBarGraphProfileRevisionKey = "barsProfileRev";
+// Increment when the ControllerProfile layout changes. Stored in NVS beside the
+// blob; a mismatch discards the stored profiles rather than reading them back
+// shifted.
+static constexpr uint8_t kControllerProfileRevision = 1;
+static constexpr const char *kControllerProfileRevisionKey = "profRev";
 static const uint8_t kDashboardDataCounts[MODE_COUNT] = {
     8, 8, 3, 11, 4, 3, 7, 4, 7, 5, 4, 4,
 };
@@ -1343,11 +1363,95 @@ struct AppSettingsSnapshot {
   uint16_t autoReturnTimeoutSeconds;
   uint8_t controllerBackendId;
   bool controllerEverConnected;
+  uint8_t cruiseEnabled;
+  uint16_t cruiseHoldTimeDeciS;
+  uint16_t cruiseMinSpeedKmh;
+  uint16_t cruiseMaxSpeedKmh;
+  uint16_t cruiseDeadbandHundredths;
+  uint8_t cruiseAllowedModes;
+  uint8_t activeProfile;
   DashboardCustomization profiles[MODE_COUNT];
 };
 
 static AppSettingsSnapshot persistedAppSettings = {};
 static bool persistedAppSettingsKnown = false;
+
+// Controller profiles are persisted as one blob, compared member-wise rather
+// than with memcmp: the struct has padding between its integer members, and
+// comparing padding bytes would make an unchanged array look dirty.
+static ControllerProfile persistedControllerProfiles[kControllerProfileCount] = {};
+static bool persistedControllerProfilesKnown = false;
+
+static bool sameControllerProfile(const ControllerProfile &a, const ControllerProfile &b) {
+  return strncmp(a.name, b.name, sizeof(a.name)) == 0 && a.mode1Kmh == b.mode1Kmh && a.mode2Kmh == b.mode2Kmh &&
+         a.mode3Kmh == b.mode3Kmh && a.cruiseMaxKmh == b.cruiseMaxKmh && a.maxBatteryAmps == b.maxBatteryAmps &&
+         a.maxMotorAmps == b.maxMotorAmps && a.maxPowerDeciKw == b.maxPowerDeciKw &&
+         a.accelPercent == b.accelPercent && a.valid == b.valid;
+}
+
+static bool sameControllerProfiles(const ControllerProfile *a, const ControllerProfile *b) {
+  for (uint8_t i = 0; i < kControllerProfileCount; i++)
+    if (!sameControllerProfile(a[i], b[i])) return false;
+  return true;
+}
+
+static void setDefaultControllerProfile(uint8_t index) {
+  if (index >= kControllerProfileCount) return;
+  ControllerProfile &p = controllerProfiles[index];
+  memset(&p, 0, sizeof(p));
+  // Named but empty: the slot shows a ready label and fills in when the rider
+  // captures the current setup, so a fresh display lists four prepared slots
+  // rather than blanks.
+  snprintf(p.name, sizeof(p.name), "PROFILE %u", (unsigned)(index + 1));
+  p.valid = false;
+}
+
+static void setDefaultControllerProfiles() {
+  for (uint8_t i = 0; i < kControllerProfileCount; i++) setDefaultControllerProfile(i);
+  activeControllerProfile = 0xFF;
+}
+
+void saveControllerProfile(uint8_t index, const char *name) {
+  if (index >= kControllerProfileCount) return;
+  ControllerProfile &p = controllerProfiles[index];
+  memset(&p, 0, sizeof(p));
+  if (name && name[0]) snprintf(p.name, sizeof(p.name), "%s", name);
+  else snprintf(p.name, sizeof(p.name), "PROFILE %u", (unsigned)(index + 1));
+  p.mode1Kmh = speedMode1Kmh;
+  p.mode2Kmh = speedMode2Kmh;
+  p.mode3Kmh = speedMode3Kmh;
+  p.cruiseMaxKmh = cruiseMaxSpeedKmh;
+  p.maxBatteryAmps = batteryMaxAmps;
+  p.maxMotorAmps = motorMaxAmps;
+  p.maxPowerDeciKw = continuousPowerDeciKw;
+  p.accelPercent = speedAccelCurvePercent;
+  p.valid = true;
+  saveAppSettings();
+}
+
+void applyControllerProfile(uint8_t index) {
+  if (index >= kControllerProfileCount || !controllerProfiles[index].valid) return;
+  const ControllerProfile &p = controllerProfiles[index];
+  speedMode1Kmh = p.mode1Kmh;
+  speedMode2Kmh = p.mode2Kmh;
+  speedMode3Kmh = p.mode3Kmh;
+  cruiseMaxSpeedKmh = p.cruiseMaxKmh;
+  batteryMaxAmps = p.maxBatteryAmps;
+  motorMaxAmps = p.maxMotorAmps;
+  continuousPowerDeciKw = p.maxPowerDeciKw;
+  speedAccelCurvePercent = p.accelPercent;
+  // Keep the cruise window ordered after the profile moves the ceiling.
+  if (cruiseMinSpeedKmh >= cruiseMaxSpeedKmh) cruiseMinSpeedKmh = cruiseMaxSpeedKmh > 1 ? cruiseMaxSpeedKmh - 1 : 0;
+  activeControllerProfile = index;
+  saveAppSettings();
+}
+
+void resetControllerProfile(uint8_t index) {
+  if (index >= kControllerProfileCount) return;
+  setDefaultControllerProfile(index);
+  if (activeControllerProfile == index) activeControllerProfile = 0xFF;
+  saveAppSettings();
+}
 
 static AppSettingsSnapshot currentAppSettingsSnapshot() {
   AppSettingsSnapshot snapshot = {};
@@ -1410,6 +1514,13 @@ static AppSettingsSnapshot currentAppSettingsSnapshot() {
   snapshot.autoReturnTimeoutSeconds = autoReturnTimeoutSeconds;
   snapshot.controllerBackendId = static_cast<uint8_t>(controllerBackendIdFor(controllerType, controllerConnection));
   snapshot.controllerEverConnected = controllerEverConnected;
+  snapshot.cruiseEnabled = cruiseControlEnabled;
+  snapshot.cruiseHoldTimeDeciS = cruiseHoldTimeDeciS;
+  snapshot.cruiseMinSpeedKmh = cruiseMinSpeedKmh;
+  snapshot.cruiseMaxSpeedKmh = cruiseMaxSpeedKmh;
+  snapshot.cruiseDeadbandHundredths = cruiseDeadbandHundredths;
+  snapshot.cruiseAllowedModes = cruiseAllowedModes;
+  snapshot.activeProfile = activeControllerProfile;
   memcpy(snapshot.profiles, dashboardCustomizations, sizeof(snapshot.profiles));
   return snapshot;
 }
@@ -1493,7 +1604,20 @@ void saveAppSettings() {
   PUT_CHANGED(autoReturnTimeoutSeconds, putUShort("autoRetSec", current.autoReturnTimeoutSeconds));
   PUT_CHANGED(controllerBackendId, putUChar("ctrlBackend", current.controllerBackendId));
   PUT_CHANGED(controllerEverConnected, putBool("ctrlSeen", current.controllerEverConnected));
+  PUT_CHANGED(cruiseEnabled, putBool("cruiseOn", current.cruiseEnabled));
+  PUT_CHANGED(cruiseHoldTimeDeciS, putUShort("cruiseHold", current.cruiseHoldTimeDeciS));
+  PUT_CHANGED(cruiseMinSpeedKmh, putUShort("cruiseMin", current.cruiseMinSpeedKmh));
+  PUT_CHANGED(cruiseMaxSpeedKmh, putUShort("cruiseMax", current.cruiseMaxSpeedKmh));
+  PUT_CHANGED(cruiseDeadbandHundredths, putUShort("cruiseDead", current.cruiseDeadbandHundredths));
+  PUT_CHANGED(cruiseAllowedModes, putUChar("cruiseModes", current.cruiseAllowedModes));
+  PUT_CHANGED(activeProfile, putUChar("activeProf", current.activeProfile));
 #undef PUT_CHANGED
+  if (!persistedControllerProfilesKnown || !sameControllerProfiles(controllerProfiles, persistedControllerProfiles)) {
+    preferences.putBytes("profiles", controllerProfiles, sizeof(controllerProfiles));
+    preferences.putUChar(kControllerProfileRevisionKey, kControllerProfileRevision);
+    memcpy(persistedControllerProfiles, controllerProfiles, sizeof(controllerProfiles));
+    persistedControllerProfilesKnown = true;
+  }
   if (writeAll || memcmp(current.profiles, persistedAppSettings.profiles, sizeof(current.profiles)) != 0) {
     preferences.putBytes("uiProfiles", current.profiles, sizeof(current.profiles));
     preferences.putUChar(kBarGraphProfileRevisionKey, kBarGraphProfileRevision);
@@ -1616,6 +1740,13 @@ static void setDefaultAppSettings() {
   controllerConnection = CONTROLLER_CONNECTION_UART;
   configStep = 0;
   pinInput[0] = '\0';
+  cruiseControlEnabled = false;
+  cruiseHoldTimeDeciS = 50;
+  cruiseMinSpeedKmh = 5;
+  cruiseMaxSpeedKmh = 25;
+  cruiseDeadbandHundredths = 2;
+  cruiseAllowedModes = (1u << 0) | (1u << 1);
+  setDefaultControllerProfiles();
   applyDashboardCustomization(dashboardMode);
 }
 
@@ -1760,6 +1891,27 @@ void loadAppSettings() {
   if (!controllerBackendById(backendId)) backendId = CONTROLLER_ID_VESC_UART;
   controllerSelectionForId(backendId, controllerType, controllerConnection);
   displayBrightnessPercent = constrain(displayBrightnessPercent, DISPLAY_BRIGHTNESS_MIN, DISPLAY_BRIGHTNESS_MAX);
+  cruiseControlEnabled = preferences.getBool("cruiseOn", false);
+  cruiseHoldTimeDeciS = constrain(preferences.getUShort("cruiseHold", cruiseHoldTimeDeciS), 1, 100);
+  cruiseMinSpeedKmh = constrain(preferences.getUShort("cruiseMin", cruiseMinSpeedKmh), 0, 500);
+  cruiseMaxSpeedKmh = constrain(preferences.getUShort("cruiseMax", cruiseMaxSpeedKmh), 0, 500);
+  cruiseDeadbandHundredths = constrain(preferences.getUShort("cruiseDead", cruiseDeadbandHundredths), 0, 500);
+  cruiseAllowedModes = preferences.getUChar("cruiseModes", cruiseAllowedModes) & 0x07;
+  // A stored window that lost its order is repaired rather than trusted: cruise
+  // would otherwise refuse every engage because the floor sits above the ceiling.
+  if (cruiseMaxSpeedKmh < cruiseMinSpeedKmh) cruiseMaxSpeedKmh = cruiseMinSpeedKmh;
+  const uint8_t storedProfileRevision = preferences.getUChar(kControllerProfileRevisionKey, 0);
+  const size_t storedProfileLength = preferences.getBytesLength("profiles");
+  const bool profileBlobCurrent =
+      storedProfileRevision == kControllerProfileRevision && storedProfileLength == sizeof(controllerProfiles);
+  if (profileBlobCurrent) {
+    preferences.getBytes("profiles", controllerProfiles, sizeof(controllerProfiles));
+  } else {
+    setDefaultControllerProfiles();
+  }
+  activeControllerProfile = preferences.getUChar("activeProf", 0xFF);
+  if (activeControllerProfile >= kControllerProfileCount) activeControllerProfile = 0xFF;
+  if (activeControllerProfile != 0xFF && !controllerProfiles[activeControllerProfile].valid) activeControllerProfile = 0xFF;
   const uint8_t storedMotorDataProfileRevision = preferences.getUChar(kMotorDataProfileRevisionKey, 0);
   const uint8_t storedBarGraphProfileRevision = preferences.getUChar(kBarGraphProfileRevisionKey, 0);
   const size_t storedLength = preferences.getBytesLength("uiProfiles");
@@ -1804,6 +1956,8 @@ void loadAppSettings() {
   applyDashboardCustomization(dashboardMode);
   persistedAppSettings = currentAppSettingsSnapshot();
   persistedAppSettingsKnown = true;
+  memcpy(persistedControllerProfiles, controllerProfiles, sizeof(controllerProfiles));
+  persistedControllerProfilesKnown = true;
 }
 
 void saveVehicleProfile() {

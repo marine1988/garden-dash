@@ -16,6 +16,11 @@ struct FirmwareChangelogEntry {
 
 static const FirmwareChangelogEntry kFirmwareChangelog[] = {
     {
+        "2026-10-09",
+        "Cruise control & profiles",
+        "Hold to engage cruise over a VESC link; four profiles store vehicle setups.",
+    },
+    {
         "2026-10-06",
         "Battery chemistry",
         "Battery Configuration is one page, with Li-ion, LiPo, LiFePO4 and editable cell volts.",
@@ -29,11 +34,6 @@ static const FirmwareChangelogEntry kFirmwareChangelog[] = {
         "2026-10-06",
         "Smoother dashboard updates",
         "Needles glide, unchanged values skip redraws, and overlay slides pause dashboard updates.",
-    },
-    {
-        "2026-10-06",
-        "Automatic gauge ranges",
-        "Gauge scales learn peaks, shrink after quieter riding, and keep separate link state.",
     },
 };
 

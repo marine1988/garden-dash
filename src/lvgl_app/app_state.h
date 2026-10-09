@@ -172,6 +172,8 @@ enum SubmenuType {
   SUBMENU_CONTROLLER_TYPE,
   SUBMENU_AUTO_RETURN,
   SUBMENU_DEMO,
+  SUBMENU_CRUISE,
+  SUBMENU_PROFILES,
   SUBMENU_GENERIC
 };
 
@@ -359,6 +361,45 @@ void resetBatteryStats();
 // Snapshot for the UI task (main_lvgl.cpp publishes it under the telemetry
 // lock; the preview build stubs it).
 BatteryStats getBatteryStats();
+
+// A saved vehicle setup the rider can switch between. Applying a profile copies
+// its numbers into the live speed-mode and cruise settings; the display never
+// rewrites the controller's own configuration, which would reboot the motor and
+// touch its flash, so a profile is a display-side preset the rider can trust and
+// the cruise loop honours. `name` is a short label shown in the list.
+struct ControllerProfile {
+  char name[12];
+  uint32_t mode1Kmh;
+  uint32_t mode2Kmh;
+  uint32_t mode3Kmh;
+  uint16_t cruiseMaxKmh;
+  uint16_t maxBatteryAmps;
+  uint16_t maxMotorAmps;
+  uint16_t maxPowerDeciKw;
+  uint8_t accelPercent;
+  bool valid;
+};
+
+constexpr uint8_t kControllerProfileCount = 4;
+extern ControllerProfile controllerProfiles[kControllerProfileCount];
+// Index of the profile last applied, or 0xFF when none has been chosen.
+extern uint8_t activeControllerProfile;
+// Copies the profile's numbers into the live settings and records it as active.
+// Refuses an empty slot or an out-of-range index.
+void applyControllerProfile(uint8_t index);
+// Overwrites a slot with the live settings and a name, and marks it valid.
+void saveControllerProfile(uint8_t index, const char *name);
+// Restores a slot's defaults (so it reads as a starting point, not a blank).
+void resetControllerProfile(uint8_t index);
+
+// Cruise control settings, applied by the controller backend from the telemetry
+// task. Persisted with the rest of the app settings.
+extern bool cruiseControlEnabled;
+extern uint16_t cruiseHoldTimeDeciS;       // press-and-hold to engage, tenths of a second
+extern uint16_t cruiseMinSpeedKmh;
+extern uint16_t cruiseMaxSpeedKmh;
+extern uint16_t cruiseDeadbandHundredths;  // 0.01 km/h
+extern uint8_t cruiseAllowedModes;         // bit (1 << (mode-1)); 0 refuses every reported mode
 
 // Settings / state (defined in app_logic.cpp)
 extern DashboardMode dashboardMode;

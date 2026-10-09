@@ -63,8 +63,12 @@ in-app licence list.
 
 ## Safety
 
-The current firmware displays and records telemetry without changing controller
-settings or controlling the vehicle. Controller profiles and settings adjustment
-are planned. Contributions to that support must follow the confirmed/pending
-settings, explicit application, and read-back requirements in
+The firmware displays and records telemetry, and offers a display-side cruise
+control that holds a VESC setpoint. It does not rewrite the controller's stored
+configuration. Contributions that touch the controller link, the cruise release
+conditions, or anything that commands the vehicle must keep the release paths
+intact (fault, lost link, braking under the minimum, explicit cancel) and be
+tested on real hardware before being treated as working. Contributions to
+controller-configuration writes must follow the confirmed/pending settings,
+explicit application, and read-back requirements in
 [`docs/ui-components.md`](docs/ui-components.md#vehicle-configuration).

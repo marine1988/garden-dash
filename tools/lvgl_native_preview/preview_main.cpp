@@ -857,6 +857,27 @@ int main(int argc, char **argv) {
       if (stopAfterSelected()) return 0;
     }
 
+    if (selected("34_controller_hub")) {
+      showSubmenu(output, SUBMENU_CONTROLLER_CONFIG, 0, false, "34_controller_hub");
+      if (stopAfterSelected()) return 0;
+    }
+    if (selected("34_cruise_window")) {
+      showSubmenu(output, SUBMENU_CRUISE, 0, false, "34_cruise_window");
+      if (stopAfterSelected()) return 0;
+    }
+    if (selected("34_cruise_modes")) {
+      showSubmenu(output, SUBMENU_CRUISE, 1, false, "34_cruise_modes");
+      if (stopAfterSelected()) return 0;
+    }
+    if (selected("34_profiles_slots")) {
+      showSubmenu(output, SUBMENU_PROFILES, 0, false, "34_profiles_slots");
+      if (stopAfterSelected()) return 0;
+    }
+    if (selected("34_profiles_manage")) {
+      showSubmenu(output, SUBMENU_PROFILES, 1, false, "34_profiles_manage");
+      if (stopAfterSelected()) return 0;
+    }
+
     if (selected("28_first_boot_config")) {
       uiPreviewSetConfigStep(0); uiShow(SCREEN_CONFIG); capture(output, "28_first_boot_config");
       if (stopAfterSelected()) return 0;

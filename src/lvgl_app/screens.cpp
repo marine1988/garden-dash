@@ -92,6 +92,13 @@ enum StatusNotice : uint8_t {
   NOTICE_LIGHT_SENSOR_RANGE_TOO_SMALL,
   NOTICE_SETUP_COMPLETE,
   NOTICE_CONTROLLER_SETUP_APPLIED,
+  NOTICE_CRUISE_ENGAGED,
+  NOTICE_CRUISE_CANCELLED,
+  NOTICE_CRUISE_HOLD,
+  NOTICE_CRUISE_UNAVAILABLE,
+  NOTICE_PROFILE_APPLIED,
+  NOTICE_PROFILE_SAVED,
+  NOTICE_PROFILE_CLEARED,
 };
 
 static StatusNotice pendingStatusNotice = NOTICE_NONE;
@@ -124,6 +131,9 @@ static int dashGridThemeAt(int displayIndex) {
 static uint8_t vehiclePage = 0;
 static uint8_t speedPage = 0;
 static uint8_t displayPage = 0;
+// CRUISE CONTROL and PROFILES both split their content over two pages.
+static uint8_t cruisePage = 0;
+static uint8_t profilePage = 0;
 // DISPLAY PANEL: profile choice, then tuning over grey and colour ramps.
 static constexpr uint8_t kPanelPageCount = 2;
 static uint8_t panelPage = 0;
@@ -267,7 +277,37 @@ enum TextInputContext {
   INPUT_CONFIG_WHEEL,
   INPUT_CONFIG_PIN_NEW,
   INPUT_CONFIG_PIN_CONFIRM,
+  INPUT_CRUISE_VALUE,
 };
+
+// Which cruise number the text input is editing. Kept apart from
+// vehicleTextField: cruise settings are their own globals, not vehicle-profile
+// fields, so they do not go through vehicleFieldTitle/saveVehicleInputValue.
+enum CruiseTextField {
+  CRUISE_FIELD_HOLD = 0,
+  CRUISE_FIELD_DEADBAND,
+  CRUISE_FIELD_MIN_SPEED,
+  CRUISE_FIELD_MAX_SPEED,
+  CRUISE_FIELD_COUNT,
+};
+
+static CruiseTextField cruiseTextField = CRUISE_FIELD_HOLD;
+
+// Option indices carried by BTN_OPTION_BASE on the cruise and profile pages.
+enum CruiseOption {
+  kCruiseOptEnable = 0,
+  kCruiseOptHold,
+  kCruiseOptDeadband,
+  kCruiseOptMinSpeed,
+  kCruiseOptMaxSpeed,
+  kCruiseOptModeEco,
+  kCruiseOptModeDrive,
+  kCruiseOptModeSport,
+  kCruiseOptEngage,
+};
+// Slots occupy 0..kControllerProfileCount-1, then the two manage actions.
+constexpr int kProfileOptSave = kControllerProfileCount;
+constexpr int kProfileOptClear = kControllerProfileCount + 1;
 
 static TextInputContext textInputContext = INPUT_VEHICLE_FIELD;
 static char pendingSecurityPin[5] = "";
@@ -2139,6 +2179,28 @@ static const char *statusNoticeText(StatusNotice notice) {
       return txt("CONTROLLER SETUP SAVED", "OHJAINASETUKSET TALLENNETTU",
                  "CONTROLLER-SETUP GESPEICHERT", "CONFIGURATION CONTRÔLEUR ENREGISTRÉE",
                  "CONFIGURACIÓN DEL CONTROLADOR GUARDADA", "CONFIGURAZIONE CENTRALINA SALVATA");
+    case NOTICE_CRUISE_ENGAGED:
+      return txt("CRUISE ENGAGED", "VAKIONOPEUS PÄÄLLÄ", "TEMPOMAT AKTIV", "RÉGULATEUR ACTIF",
+                 "CONTROL CRUCERO ACTIVO", "CRUISE ATTIVO");
+    case NOTICE_CRUISE_CANCELLED:
+      return txt("CRUISE CANCELLED", "VAKIONOPEUS POIS", "TEMPOMAT AUS", "RÉGULATEUR DÉSACTIVÉ",
+                 "CONTROL CRUCERO DESACTIVADO", "CRUISE DISATTIVATO");
+    case NOTICE_CRUISE_HOLD:
+      return txt("HOLD THE BUTTON TO ENGAGE", "PIDÄ PAINETTAVA POHJASSA", "ZUM AKTIVIEREN HALTEN",
+                 "MAINTENEZ LE BOUTON", "MANTÉN PULSADO", "TIENI PREMUTO");
+    case NOTICE_CRUISE_UNAVAILABLE:
+      return txt("CRUISE NEEDS A VESC LINK", "VAKIONOPEUS VAATII VESC-YHTEYDEN",
+                 "TEMPOMAT BRAUCHT VESC-LINK", "RÉGULATEUR : LIEN VESC REQUIS",
+                 "CONTROL CRUCERO: SE REQUIERE VESC", "CRUISE: SERVE COLLEGAMENTO VESC");
+    case NOTICE_PROFILE_APPLIED:
+      return txt("PROFILE APPLIED", "PROFIILI KÄYTÖSSÄ", "PROFIL AKTIV", "PROFIL APPLIQUÉ",
+                 "PERFIL APLICADO", "PROFILO APPLICATO");
+    case NOTICE_PROFILE_SAVED:
+      return txt("SETUP SAVED TO SLOT", "KOKOONPANO TALLENNETTU", "SETUP GESPEICHERT",
+                 "CONFIGURATION ENREGISTRÉE", "AJUSTE GUARDADO", "SETUP SALVATO");
+    case NOTICE_PROFILE_CLEARED:
+      return txt("SLOT CLEARED", "PAIKKA TYHJENNETTY", "SLOT GELEERT", "EMPLACEMENT VIDÉ",
+                 "RANURA VACIADA", "SLOT SVUOTATO");
     default:
       return "";
   }
@@ -2643,6 +2705,83 @@ static void developerDisplayButtonEventCb(lv_event_t *e) {
     return;
   }
   menuAction(BTN_MENU_DISPLAY);
+}
+
+// ── Cruise engage button ─────────────────────────────────────────────────────
+
+// Engaging holds the button for the configured hold time, so a passing touch
+// cannot take over the throttle. Cancelling is a plain tap and never waits: a
+// rider reaching for the brake must be able to hand control back at once.
+static lv_obj_t *cruiseEngageButton = NULL;
+static lv_timer_t *cruiseHoldTimer = NULL;
+static uint32_t cruiseHoldStartedMs = 0;
+static bool cruiseHoldTriggered = false;
+
+static void stopCruiseHoldTimer() {
+  if (!cruiseHoldTimer) return;
+  lv_timer_del(cruiseHoldTimer);
+  cruiseHoldTimer = NULL;
+}
+
+static void cruiseHoldTimerCb(lv_timer_t *timer) {
+  if (!cruiseEngageButton) {
+    cruiseHoldTimer = NULL;
+    lv_timer_del(timer);
+    return;
+  }
+  // The press has to last the configured time (tenths of a second), with a
+  // floor of one tick so a zero setting still needs a deliberate press.
+  const uint32_t required = (uint32_t)max<uint16_t>(1, cruiseHoldTimeDeciS) * 100UL;
+  if (millis() - cruiseHoldStartedMs < required) return;
+  cruiseHoldTriggered = true;
+  cruiseHoldTimer = NULL;
+  lv_timer_del(timer);
+  if (!controllerSupportsCruise()) {
+    queueStatusNotice(NOTICE_CRUISE_UNAVAILABLE);
+  } else {
+    controllerCruiseEngage();
+    queueStatusNotice(NOTICE_CRUISE_ENGAGED);
+  }
+  queueRebuild(SCREEN_SUBMENU);
+}
+
+static void cruiseEngageEventCb(lv_event_t *e) {
+  const lv_event_code_t code = lv_event_get_code(e);
+  lv_obj_t *button = lv_event_get_target(e);
+  if (code == LV_EVENT_DELETE) {
+    stopCruiseHoldTimer();
+    cruiseEngageButton = NULL;
+    return;
+  }
+  if (code == LV_EVENT_PRESSED) {
+    uint16_t activeTarget = 0;
+    if (controllerCruiseActive(activeTarget)) return;  // a tap cancels, below
+    cruiseEngageButton = button;
+    cruiseHoldTriggered = false;
+    cruiseHoldStartedMs = millis();
+    stopCruiseHoldTimer();
+    cruiseHoldTimer = lv_timer_create(cruiseHoldTimerCb, 40, NULL);
+    return;
+  }
+  if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+    stopCruiseHoldTimer();
+    lv_obj_set_style_bg_color(button, cyd_ui::activeControlSurface(), LV_STATE_PRESSED);
+    return;
+  }
+  if (code != LV_EVENT_CLICKED) return;
+  if (cruiseHoldTriggered) {
+    cruiseHoldTriggered = false;
+    return;
+  }
+  uint16_t activeTarget = 0;
+  if (controllerCruiseActive(activeTarget)) {
+    controllerCruiseDisengage();
+    queueStatusNotice(NOTICE_CRUISE_CANCELLED);
+    queueRebuild(SCREEN_SUBMENU);
+    return;
+  }
+  // A tap too short to engage: say so rather than doing nothing.
+  queueStatusNotice(NOTICE_CRUISE_HOLD);
 }
 
 static lv_obj_t *makeMenuTopBar(lv_obj_t *scr, const char *title, uint8_t pageNumber, uint8_t pageCount,
@@ -3643,6 +3782,10 @@ static uint8_t submenuItemCount() {
       return CONTROLLER_TYPE_COUNT;
     case SUBMENU_AUTO_RETURN:
       return 1;
+    case SUBMENU_CRUISE:
+      return 2;
+    case SUBMENU_PROFILES:
+      return 2;
     default:
       return 1;
   }
@@ -3677,6 +3820,10 @@ static uint8_t submenuItemIndex() {
       return 1;
     case SUBMENU_CONTROLLER_TYPE:
       return static_cast<uint8_t>(pendingControllerType) + 1;
+    case SUBMENU_CRUISE:
+      return cruisePage + 1;
+    case SUBMENU_PROFILES:
+      return profilePage + 1;
     default:
       return 1;
   }
@@ -3734,6 +3881,14 @@ static const char *submenuCurrentName() {
                        "Temporizador activo", "Timer attivo")
                  : txt("Automatic return disabled", "Automaattipaluu pois", "Auto-Rückkehr aus",
                        "Retour automatique désactivé", "Retorno automático desactivado", "Ritorno automatico disattivo");
+    case SUBMENU_CRUISE:
+      if (cruisePage == 0)
+        return txt("Speed window", "Nopeusikkuna", "Tempo-Fenster", "Plage de vitesse", "Ventana de velocidad", "Finestra velocità");
+      return txt("Modes & engage", "Tilat ja käyttö", "Modi & Start", "Modes et activation", "Modos y activación", "Modalità e attivazione");
+    case SUBMENU_PROFILES:
+      if (profilePage == 0)
+        return txt("Saved setups", "Tallennetut kokoonpanot", "Gespeicherte Setups", "Configurations enregistrées", "Ajustes guardados", "Setup salvati");
+      return txt("Manage slots", "Hallitse paikkoja", "Slots verwalten", "Gérer les emplacements", "Gestionar ranuras", "Gestisci slot");
     default:
       return "";
   }
@@ -3757,6 +3912,10 @@ static void submenuPrevious() {
     if (displayPage > 0) displayPage--;
   } else if (submenuType == SUBMENU_PIN) {
     cyclePinOption();
+  } else if (submenuType == SUBMENU_CRUISE) {
+    if (cruisePage > 0) cruisePage--;
+  } else if (submenuType == SUBMENU_PROFILES) {
+    if (profilePage > 0) profilePage--;
   }
 }
 
@@ -3779,6 +3938,10 @@ static void submenuNext() {
     if (panelPage + 1 < kPanelPageCount) panelPage++;
   } else if (submenuType == SUBMENU_PIN) {
     cyclePinOption();
+  } else if (submenuType == SUBMENU_CRUISE) {
+    if (cruisePage + 1 < submenuItemCount()) cruisePage++;
+  } else if (submenuType == SUBMENU_PROFILES) {
+    if (profilePage + 1 < submenuItemCount()) profilePage++;
   }
 }
 
@@ -4304,8 +4467,9 @@ static void submenuAction(int id) {
       queueRebuild(SCREEN_SUBMENU);
       return;
     case SUBMENU_CONTROLLER_CONFIG: {
-      const SubmenuType sections[] = {SUBMENU_POWER_LIMITS, SUBMENU_SPEED, SUBMENU_SPEED_CALIBRATION, SUBMENU_GAUGE_RANGES};
-      if (option < 0 || option >= 4) return;
+      const SubmenuType sections[] = {SUBMENU_POWER_LIMITS, SUBMENU_SPEED, SUBMENU_SPEED_CALIBRATION,
+                                       SUBMENU_GAUGE_RANGES, SUBMENU_PROFILES, SUBMENU_CRUISE};
+      if (option < 0 || option >= 6) return;
       submenuType = sections[option]; speedPage = 0;
       queueRebuild(SCREEN_SUBMENU); return;
     }
@@ -4376,6 +4540,81 @@ static void submenuAction(int id) {
       }
       resetConfirmMode = -1;
       queueRebuild(SCREEN_MENU);
+      return;
+    case SUBMENU_PROFILES:
+      if (option >= 0 && option < kControllerProfileCount) {
+        if (controllerProfiles[option].valid) {
+          applyControllerProfile(option);
+          queueStatusNotice(NOTICE_PROFILE_APPLIED);
+        } else {
+          // An empty slot captures the live setup under its prepared name.
+          saveControllerProfile(option, controllerProfiles[option].name);
+          activeControllerProfile = option;
+          saveAppSettings();
+          queueStatusNotice(NOTICE_PROFILE_SAVED);
+        }
+        queueRebuild(SCREEN_SUBMENU);
+        return;
+      }
+      if (option == kProfileOptSave) {
+        if (activeControllerProfile < kControllerProfileCount) {
+          saveControllerProfile(activeControllerProfile, controllerProfiles[activeControllerProfile].name);
+          queueStatusNotice(NOTICE_PROFILE_SAVED);
+        }
+        queueRebuild(SCREEN_SUBMENU);
+        return;
+      }
+      if (option == kProfileOptClear) {
+        if (activeControllerProfile < kControllerProfileCount) {
+          resetControllerProfile(activeControllerProfile);
+          queueStatusNotice(NOTICE_PROFILE_CLEARED);
+        }
+        queueRebuild(SCREEN_SUBMENU);
+        return;
+      }
+      return;
+    case SUBMENU_CRUISE:
+      switch (option) {
+        case kCruiseOptEnable:
+          cruiseControlEnabled = !cruiseControlEnabled;
+          // Switching cruise off releases immediately rather than leaving the
+          // controller holding until its own timeout.
+          if (!cruiseControlEnabled) controllerCruiseDisengage();
+          saveAppSettings();
+          break;
+        case kCruiseOptHold:
+          cruiseTextField = CRUISE_FIELD_HOLD;
+          textInputContext = INPUT_CRUISE_VALUE;
+          queueRebuild(SCREEN_TEXT_INPUT);
+          return;
+        case kCruiseOptDeadband:
+          cruiseTextField = CRUISE_FIELD_DEADBAND;
+          textInputContext = INPUT_CRUISE_VALUE;
+          queueRebuild(SCREEN_TEXT_INPUT);
+          return;
+        case kCruiseOptMinSpeed:
+          cruiseTextField = CRUISE_FIELD_MIN_SPEED;
+          textInputContext = INPUT_CRUISE_VALUE;
+          queueRebuild(SCREEN_TEXT_INPUT);
+          return;
+        case kCruiseOptMaxSpeed:
+          cruiseTextField = CRUISE_FIELD_MAX_SPEED;
+          textInputContext = INPUT_CRUISE_VALUE;
+          queueRebuild(SCREEN_TEXT_INPUT);
+          return;
+        case kCruiseOptModeEco:
+        case kCruiseOptModeDrive:
+        case kCruiseOptModeSport:
+          cruiseAllowedModes ^= (uint8_t)(1u << (option - kCruiseOptModeEco));
+          saveAppSettings();
+          break;
+        case kCruiseOptEngage:
+          // The engage tile owns its own hold/cancel handling.
+          return;
+        default:
+          return;
+      }
+      queueRebuild(SCREEN_SUBMENU);
       return;
     default:
       return;
@@ -5449,6 +5688,8 @@ static const char *vehicleSectionTitle(SubmenuType type) {
     case SUBMENU_SPEED: return txt("RIDE MODES", "AJOTILAT", "FAHRMODI", "MODES", "MODOS", "MODALITÀ");
     case SUBMENU_SPEED_CALIBRATION: return txt("CALIBRATION", "KALIBROINTI", "KALIBRIERUNG", "ÉTALONNAGE", "CALIBRACIÓN", "CALIBRAZIONE");
     case SUBMENU_GAUGE_RANGES: return txt("GAUGE RANGES", "MITTARIASTEIKOT", "ANZEIGESKALEN", "ÉCHELLES", "ESCALAS", "SCALE");
+    case SUBMENU_CRUISE: return txt("CRUISE CONTROL", "VAKIONOPEUS", "TEMPOMAT", "RÉGULATEUR", "CONTROL CRUCERO", "CRUISE CONTROL");
+    case SUBMENU_PROFILES: return txt("PROFILES", "PROFIILIT", "PROFILE", "PROFILS", "PERFILES", "PROFILI");
     default: return txt("SETTING", "ASETUS", "EINSTELL.", "RÉGLAGE", "AJUSTE", "IMPOSTAZ.");
   }
 }
@@ -5466,6 +5707,16 @@ static void makeVehicleFields(lv_obj_t *scr, const uint8_t *source, uint8_t coun
 
 static void makeVehicleExplanation(lv_obj_t *scr, const char *text) {
   lv_obj_t *label = makeLabelAt(scr, kMenuEdgeX + 8, 58, text, cyd_ui::secondaryText(), &lv_font_rajdhani_14, 0);
+  lv_obj_set_width(label, kMenuContentW - 16);
+  lv_obj_set_height(label, LV_SIZE_CONTENT);
+  lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+}
+
+// The same wrapping explainer, placed at a caller-chosen row. Pages that fill
+// their upper rows with controls (cruise, profiles) need the note below them
+// rather than at the fixed 58 px makeVehicleExplanation uses.
+static void makeExplanationAt(lv_obj_t *scr, int y, const char *text) {
+  lv_obj_t *label = makeLabelAt(scr, kMenuEdgeX + 8, y, text, cyd_ui::secondaryText(), &lv_font_rajdhani_12, 0);
   lv_obj_set_width(label, kMenuContentW - 16);
   lv_obj_set_height(label, LV_SIZE_CONTENT);
   lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
@@ -5511,6 +5762,8 @@ static void showSubmenu() {
   else if (submenuType == SUBMENU_CONTROLLER_TYPE)
     title = txt("CONTROLLER SETUP", "OHJAIMEN MÄÄRITYS", "CONTROLLER-SETUP", "CONFIG. CONTRÔLEUR",
                 "CONFIG. CONTROLADOR", "CONFIG. CONTROLLER");
+  else if (submenuType == SUBMENU_CRUISE) title = vehicleSectionTitle(SUBMENU_CRUISE);
+  else if (submenuType == SUBMENU_PROFILES) title = vehicleSectionTitle(SUBMENU_PROFILES);
   else if (submenuType == SUBMENU_CONFIGURATOR)
     title = txt("NEW USER SETUP", "KÄYTTÖÖNOTTO", "ERSTEINRICHT.", "CONFIG INIT.", "CONFIG INICIAL",
                 "CONFIG INIZ.");
@@ -5567,15 +5820,18 @@ static void showSubmenu() {
 
   if (submenuType == SUBMENU_CONTROLLER_CONFIG) {
     makeMenuTopBar(scr, txt("CONFIGURATION", "ASETUKSET", "KONFIGURATION", "CONFIGURATION", "CONFIGURACIÓN", "CONFIGURAZIONE"), 1, 1, false);
-    const SubmenuType sections[] = {SUBMENU_POWER_LIMITS, SUBMENU_SPEED, SUBMENU_SPEED_CALIBRATION, SUBMENU_GAUGE_RANGES};
+    const SubmenuType sections[] = {SUBMENU_POWER_LIMITS, SUBMENU_SPEED, SUBMENU_SPEED_CALIBRATION,
+                                     SUBMENU_GAUGE_RANGES, SUBMENU_PROFILES, SUBMENU_CRUISE};
     const char *descriptions[] = {
       txt("Controller limits", "Ohjaimen rajat", "Controllerlimits", "Limites contrôleur", "Límites controlador", "Limiti controller"),
       controllerUsesFarDriverBle() ? txt("Gears and labels", "Vaihteet ja nimet", "Gänge und Namen", "Rapports et noms", "Marchas y nombres", "Marce e nomi") : txt("Profile status", "Profiilin tila", "Profilstatus", "État du profil", "Estado perfil", "Stato profilo"),
       txt("Wheel and road speed", "Pyörä ja nopeus", "Rad und Tempo", "Roue et vitesse", "Rueda y velocidad", "Ruota e velocità"),
-      txt("Display scales only", "Vain näyttöasteikot", "Nur Anzeigeskalen", "Échelles écran", "Escalas pantalla", "Scale display")};
-    for (int i = 0; i < 4; ++i)
-      makeMenuButton(scr, i % 2 ? kTwoColRightX : kMenuEdgeX, 48 + (i / 2) * 88,
-                     i % 2 ? kTwoColRightW : kTwoColLeftW, 82, vehicleSectionTitle(sections[i]), descriptions[i], false, BTN_OPTION_BASE + i);
+      txt("Display scales only", "Vain näyttöasteikot", "Nur Anzeigeskalen", "Échelles écran", "Escalas pantalla", "Scale display"),
+      txt("Saved vehicle setups", "Tallennetut kokoonpanot", "Gespeicherte Setups", "Configurations enregistrées", "Ajustes guardados", "Setup salvati"),
+      txt("Hold a speed", "Pidä nopeus", "Tempo halten", "Maintenir la vitesse", "Mantener velocidad", "Mantieni velocità")};
+    for (int i = 0; i < 6; ++i)
+      makeMenuButton(scr, i % 2 ? kTwoColRightX : kMenuEdgeX, 48 + (i / 2) * 58,
+                     i % 2 ? kTwoColRightW : kTwoColLeftW, 54, vehicleSectionTitle(sections[i]), descriptions[i], false, BTN_OPTION_BASE + i);
     loadScreen(scr); return;
   }
   if (submenuType == SUBMENU_CONNECTION) {
@@ -5648,6 +5904,103 @@ static void showSubmenu() {
         lv_obj_set_width(note, kMenuContentW - 16); lv_obj_set_height(note, LV_SIZE_CONTENT); lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
       } else makeVehicleFields(scr, kModeLabelFields, sizeof(kModeLabelFields));
     } else makeVehicleExplanation(scr, txt("VESC does not report an active profile in standard telemetry. Configure profiles in VESC Tool. Mode display is unavailable until a profile integration is connected.", "VESC ei ilmoita aktiivista profiilia perustiedoissa. Määritä profiilit VESC Toolissa. Tilan näyttö vaatii profiili-integraation.", "VESC meldet kein aktives Profil in Standard-Telemetrie. Profile in VESC Tool einstellen. Die Anzeige benötigt eine Profilintegration.", "VESC ne transmet pas le profil actif. Configurez les profils dans VESC Tool. Affichage indisponible sans intégration.", "VESC no informa del perfil activo. Configure perfiles en VESC Tool. Se requiere integración para mostrarlos.", "VESC non comunica il profilo attivo. Configura i profili in VESC Tool. La visualizzazione richiede un'integrazione."));
+    loadScreen(scr); return;
+  }
+
+  if (submenuType == SUBMENU_CRUISE) {
+    cruisePage = min<uint8_t>(cruisePage, 1);
+    makeMenuTopBar(scr, vehicleSectionTitle(SUBMENU_CRUISE), cruisePage + 1, submenuItemCount(), true);
+    const bool supported = controllerSupportsCruise();
+    char value[24];
+    if (cruisePage == 0) {
+      makeMenuButton(scr, kMenuEdgeX, 48, kMenuContentW, 46,
+                     txt("CRUISE CONTROL", "VAKIONOPEUS", "TEMPOMAT", "RÉGULATEUR", "CONTROL CRUCERO", "CRUISE CONTROL"),
+                     cruiseControlEnabled ? txt("Enabled", "Päällä", "Aktiv", "Actif", "Activo", "Attivo")
+                                          : txt("Disabled", "Pois", "Aus", "Désactivé", "Desactivado", "Disattivo"),
+                     cruiseControlEnabled, BTN_OPTION_BASE + kCruiseOptEnable);
+      snprintf(value, sizeof(value), "%.1f s", cruiseHoldTimeDeciS / 10.0F);
+      makeMenuButton(scr, kMenuEdgeX, 102, kTwoColLeftW, 52,
+                     txt("HOLD TIME", "PITOAIKA", "HALTEZEIT", "MAINTIEN", "MANTENER", "TENUTA"), value, false,
+                     BTN_OPTION_BASE + kCruiseOptHold);
+      snprintf(value, sizeof(value), "%.2f km/h", cruiseDeadbandHundredths / 100.0F);
+      makeMenuButton(scr, kTwoColRightX, 102, kTwoColRightW, 52,
+                     txt("DEADBAND", "KUOLLUT ALUE", "TOTZONE", "ZONE MORTE", "ZONA MUERTA", "BANDA MORTA"), value,
+                     false, BTN_OPTION_BASE + kCruiseOptDeadband);
+      snprintf(value, sizeof(value), "%u km/h", cruiseMinSpeedKmh);
+      makeMenuButton(scr, kMenuEdgeX, 160, kTwoColLeftW, 52,
+                     txt("MIN SPEED", "MIN NOPEUS", "MIN-TEMPO", "VITESSE MIN", "VEL. MÍNIMA", "VEL. MINIMA"), value,
+                     false, BTN_OPTION_BASE + kCruiseOptMinSpeed);
+      snprintf(value, sizeof(value), "%u km/h", cruiseMaxSpeedKmh);
+      makeMenuButton(scr, kTwoColRightX, 160, kTwoColRightW, 52,
+                     txt("MAX SPEED", "MAX NOPEUS", "MAX-TEMPO", "VITESSE MAX", "VEL. MÁXIMA", "VEL. MASSIMA"),
+                     value, false, BTN_OPTION_BASE + kCruiseOptMaxSpeed);
+    } else {
+      const char *allowed = txt("Allowed", "Sallittu", "Erlaubt", "Autorisé", "Permitido", "Consentito");
+      makeMenuButton(scr, kMenuEdgeX, 48, kThreeColW, 50, "ECO", allowed,
+                     (cruiseAllowedModes & (1u << 0)) != 0, BTN_OPTION_BASE + kCruiseOptModeEco);
+      makeMenuButton(scr, kThreeColX1, 48, kThreeColW, 50, "DRIVE", allowed,
+                     (cruiseAllowedModes & (1u << 1)) != 0, BTN_OPTION_BASE + kCruiseOptModeDrive);
+      makeMenuButton(scr, kThreeColX2, 48, kThreeColW, 50, "SPORT", allowed,
+                     (cruiseAllowedModes & (1u << 2)) != 0, BTN_OPTION_BASE + kCruiseOptModeSport);
+      uint16_t targetKmh = 0;
+      const bool active = controllerCruiseActive(targetKmh);
+      char state[40];
+      if (active)
+        snprintf(state, sizeof(state), "%s %u km/h", txt("TARGET", "TAVOITE", "ZIEL", "CIBLE", "OBJETIVO", "OBIETTIVO"), targetKmh);
+      else
+        snprintf(state, sizeof(state), "%s", supported ? txt("Ready", "Valmis", "Bereit", "Prêt", "Listo", "Pronto")
+                                                       : txt("Not available", "Ei käytössä", "Nicht verfügbar", "Indisponible", "No disponible", "Non disponibile"));
+      lv_obj_t *engage = makeMenuButton(
+          scr, kMenuEdgeX, 108, kMenuContentW, 60,
+          active ? txt("CANCEL CRUISE", "PERUUTA VAKIONOPEUS", "TEMPOMAT ABBRECHEN", "ANNULER LE RÉGULATEUR",
+                       "CANCELAR CONTROL CRUCERO", "ANNULLA CRUISE")
+                 : txt("ENGAGE CRUISE", "KÄYTÄ VAKIONOPEUTTA", "TEMPOMAT AKTIVIEREN", "ACTIVER LE RÉGULATEUR",
+                       "ACTIVAR CONTROL CRUCERO", "ATTIVA CRUISE"),
+          state, active, BTN_OPTION_BASE + kCruiseOptEngage);
+      if (supported) {
+        lv_obj_remove_event_cb(engage, buttonEventCb);
+        lv_obj_add_event_cb(engage, cruiseEngageEventCb, LV_EVENT_ALL, NULL);
+      }
+      makeExplanationAt(
+          scr, 172,
+          active ? txt("Tap to cancel. Braking or a fault releases it too.", "Peruuta napauttamalla. Jarrutus tai vika vapauttaa myös.", "Zum Abbrechen tippen. Bremsen oder Fehler löst ebenfalls.", "Touchez pour annuler. Freinage ou défaut libère aussi.", "Toca para cancelar. Frenar o un fallo también lo libera.", "Tocca per annullare. Frenata o guasto lo rilasciano.")
+                 : txt("Hold the button to engage.", "Pidä painiketta pohjassa käyttääksesi.", "Zum Aktivieren halten.", "Maintenez le bouton pour activer.", "Mantén pulsado para activar.", "Tieni premuto per attivare."));
+    }
+    loadScreen(scr); return;
+  }
+
+  if (submenuType == SUBMENU_PROFILES) {
+    profilePage = min<uint8_t>(profilePage, 1);
+    makeMenuTopBar(scr, vehicleSectionTitle(SUBMENU_PROFILES), profilePage + 1, submenuItemCount(), true);
+    if (profilePage == 0) {
+      for (uint8_t i = 0; i < kControllerProfileCount; ++i) {
+        const ControllerProfile &p = controllerProfiles[i];
+        const char *status;
+        if (activeControllerProfile == i) status = txt("Applied", "Käytössä", "Aktiv", "Appliqué", "Aplicado", "Applicato");
+        else if (p.valid) status = txt("Saved", "Tallennettu", "Gespeichert", "Enregistré", "Guardado", "Salvato");
+        else status = txt("Empty - tap to save", "Tyhjä - tallenna", "Leer - speichern", "Vide - enregistrer", "Vacío - guardar", "Vuoto - salva");
+        makeMenuButton(scr, i % 2 ? kTwoColRightX : kMenuEdgeX, 48 + (i / 2) * 60,
+                       i % 2 ? kTwoColRightW : kTwoColLeftW, 54, p.name, status, activeControllerProfile == i,
+                       BTN_OPTION_BASE + i);
+      }
+      makeExplanationAt(
+          scr, 168,
+          txt("Tap an empty slot to save the current setup; tap a saved one to apply it.", "Tallenna nykyinen asetelma tyhjään paikkaan; käytä tallennettua napauttamalla.", "Leeren Slot tippen, um das aktuelle Setup zu speichern; gespeicherten tippen zum Anwenden.", "Touchez un emplacement vide pour enregistrer, un enregistré pour l'appliquer.", "Toca una ranura vacía para guardar, una guardada para aplicar.", "Tocca uno slot vuoto per salvare, uno salvato per applicare."));
+    } else {
+      const bool haveActive = activeControllerProfile < kControllerProfileCount;
+      makeMenuButton(scr, kMenuEdgeX, 48, kMenuContentW, 58,
+                     txt("SAVE CURRENT SETUP", "TALLENNA NYKYINEN", "AKTUELLES SETUP SPEICHERN",
+                         "ENREGISTRER L'INSTANTANÉ", "GUARDAR AJUSTE ACTUAL", "SALVA SETUP ATTUALE"),
+                     haveActive ? controllerProfiles[activeControllerProfile].name
+                                : txt("No slot selected", "Ei valittua paikkaa", "Kein Slot gewählt", "Aucun emplacement", "Sin ranura", "Nessuno slot"),
+                     false, BTN_OPTION_BASE + kProfileOptSave);
+      makeMenuButton(scr, kMenuEdgeX, 112, kMenuContentW, 58,
+                     txt("CLEAR SELECTED SLOT", "TYHJENNÄ VALITTU PAIKKA", "GEWÄHLTEN SLOT LEEREN",
+                         "VIDER L'EMPLACEMENT", "VACIAR RANURA", "SVUOTA SLOT"),
+                     haveActive ? controllerProfiles[activeControllerProfile].name : "",
+                     false, BTN_OPTION_BASE + kProfileOptClear);
+      makeExplanationAt(scr, 176, txt("Applying a profile sets its speed and power figures. It never rewrites the controller's own configuration.", "Profiilin käyttö asettaa sen nopeus- ja teholuvut. Se ei koskaan kirjoita ohjaimen omia asetuksia.", "Ein Profil setzt dessen Tempo- und Leistungswerte. Es schreibt nie die Controller-Konfiguration.", "Appliquer un profil définit ses valeurs. Il ne réécrit jamais la configuration du contrôleur.", "Aplicar un perfil fija sus valores. Nunca reescribe la configuración del controlador.", "Applicare un profilo imposta i valori. Non riscrive mai la configurazione del controller."));
+    }
     loadScreen(scr); return;
   }
 
@@ -7312,6 +7665,26 @@ static void finishTextEdit(bool save) {
       wheelDiameterMm = constrain(atoi(text), 300, 1000);
     }
     saveVehicleProfile();
+  } else if (save && textInputContext == INPUT_CRUISE_VALUE) {
+    const float entered = atof(text);
+    switch (cruiseTextField) {
+      case CRUISE_FIELD_HOLD:
+        cruiseHoldTimeDeciS = (uint16_t)constrain((int)lroundf(entered * 10.0F), 1, 100);
+        break;
+      case CRUISE_FIELD_DEADBAND:
+        cruiseDeadbandHundredths = (uint16_t)constrain((int)lroundf(entered * 100.0F), 0, 500);
+        break;
+      case CRUISE_FIELD_MIN_SPEED:
+        cruiseMinSpeedKmh = (uint16_t)constrain((int)lroundf(entered), 0, 500);
+        if (cruiseMaxSpeedKmh < cruiseMinSpeedKmh) cruiseMaxSpeedKmh = cruiseMinSpeedKmh;
+        break;
+      case CRUISE_FIELD_MAX_SPEED:
+      default:
+        cruiseMaxSpeedKmh = (uint16_t)constrain((int)lroundf(entered), 0, 500);
+        if (cruiseMaxSpeedKmh < cruiseMinSpeedKmh) cruiseMinSpeedKmh = cruiseMaxSpeedKmh;
+        break;
+    }
+    saveAppSettings();
   } else if (save && textInputContext == INPUT_CONFIG_PIN_NEW) {
     if (strlen(text) != 4) {
       lv_obj_set_style_border_color(vehicleTextArea, c565(0xF800), 0);
@@ -7533,6 +7906,43 @@ static void showTextInput() {
                 : txt("WHEEL DIAMETER", "RENKAAN KOKO", "RADDURCHMESSER", "DIAMÈTRE ROUE", "DIÁMETRO RUEDA",
                       "DIAMETRO RUOTA");
     hint = vehicleFieldInputHint(VEHICLE_FIELD_WHEEL_MM);
+  } else if (textInputContext == INPUT_CRUISE_VALUE) {
+    switch (cruiseTextField) {
+      case CRUISE_FIELD_HOLD:
+        title = txt("HOLD TIME", "PITOAIKA", "HALTEZEIT", "MAINTIEN", "MANTENER", "TENUTA");
+        hint = txt("Seconds the engage button must be held (0.1 - 10.0)",
+                   "Sekunnit, jotka painiketta pidetään (0.1 - 10.0)",
+                   "Sekunden, die der Knopf gehalten wird (0,1 - 10,0)",
+                   "Secondes de maintien du bouton (0,1 - 10,0)",
+                   "Segundos que se mantiene el botón (0,1 - 10,0)",
+                   "Secondi di tenuta del pulsante (0,1 - 10,0)");
+        break;
+      case CRUISE_FIELD_DEADBAND:
+        title = txt("DEADBAND", "KUOLLUT ALUE", "TOTZONE", "ZONE MORTE", "ZONA MUERTA", "BANDA MORTA");
+        hint = txt("Speed error left to the controller, 0.00 - 5.00 km/h",
+                   "Ohjaimelle jäävä nopeusvirhe, 0.00 - 5.00 km/h",
+                   "Dem Controller überlassene Regelabweichung, 0,00 - 5,00 km/h",
+                   "Écart de vitesse laissé au contrôleur, 0,00 - 5,00 km/h",
+                   "Error de velocidad para el controlador, 0,00 - 5,00 km/h",
+                   "Errore di velocità lasciato al controller, 0,00 - 5,00 km/h");
+        break;
+      case CRUISE_FIELD_MIN_SPEED:
+        title = txt("MIN SPEED", "MIN NOPEUS", "MIN-TEMPO", "VITESSE MIN", "VEL. MÍNIMA", "VEL. MINIMA");
+        hint = txt("Cruise will not engage below this (0 - 500 km/h)",
+                   "Vakionopeus ei kytkeydy tämän alle (0 - 500 km/h)",
+                   "Tempomat aktiviert unter diesem Wert nicht (0 - 500 km/h)",
+                   "Le régulateur ne s'active pas en dessous (0 - 500 km/h)",
+                   "El control no se activa por debajo (0 - 500 km/h)",
+                   "Il cruise non si attiva sotto questo valore (0 - 500 km/h)");
+        break;
+      case CRUISE_FIELD_MAX_SPEED:
+      default:
+        title = txt("MAX SPEED", "MAX NOPEUS", "MAX-TEMPO", "VITESSE MAX", "VEL. MÁXIMA", "VEL. MASSIMA");
+        hint = txt("Target ceiling (0 - 500 km/h)", "Tavoitteen yläraja (0 - 500 km/h)",
+                   "Obergrenze des Ziels (0 - 500 km/h)", "Plafond de la cible (0 - 500 km/h)",
+                   "Tope del objetivo (0 - 500 km/h)", "Limite del target (0 - 500 km/h)");
+        break;
+    }
   } else {
     title = vehicleFieldTitle(vehicleTextField);
     hint = vehicleFieldInputHint(vehicleTextField);
@@ -7566,6 +7976,8 @@ static void showTextInput() {
     maxLength = 4;
   } else if (textInputContext == INPUT_CONFIG_WHEEL) {
     maxLength = 4;
+  } else if (textInputContext == INPUT_CRUISE_VALUE) {
+    maxLength = 6;
   }
   lv_textarea_set_max_length(vehicleTextArea, maxLength);
   char current[32];
@@ -7575,6 +7987,14 @@ static void showTextInput() {
   } else if (editingPin) {
     current[0] = '\0';
     lv_textarea_set_password_mode(vehicleTextArea, true);
+  } else if (textInputContext == INPUT_CRUISE_VALUE) {
+    switch (cruiseTextField) {
+      case CRUISE_FIELD_HOLD: snprintf(current, sizeof(current), "%.1f", cruiseHoldTimeDeciS / 10.0F); break;
+      case CRUISE_FIELD_DEADBAND: snprintf(current, sizeof(current), "%.2f", cruiseDeadbandHundredths / 100.0F); break;
+      case CRUISE_FIELD_MIN_SPEED: snprintf(current, sizeof(current), "%u", cruiseMinSpeedKmh); break;
+      case CRUISE_FIELD_MAX_SPEED:
+      default: snprintf(current, sizeof(current), "%u", cruiseMaxSpeedKmh); break;
+    }
   } else {
     vehicleFieldEditText(vehicleTextField, current, sizeof(current));
   }
@@ -7767,6 +8187,8 @@ void uiPreviewSetSubmenu(SubmenuType type, uint8_t page, bool customSpeed) {
   speedPage = page;
   displayPage = page % displayPageCount();
   panelPage = page % kPanelPageCount;
+  cruisePage = page % 2;
+  profilePage = page % 2;
   speedSetupMode = customSpeed ? SPEED_SETUP_CUSTOM : SPEED_SETUP_PRESET;
   resetConfirmMode = -1;
   if (type == SUBMENU_DASH_UI && !colorPaletteOpen) dashUiGridOpen = true;

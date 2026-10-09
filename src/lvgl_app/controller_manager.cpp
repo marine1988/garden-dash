@@ -176,17 +176,17 @@ ControllerPollResult noPoll(ControllerSample &) { return CONTROLLER_POLL_NO_SAMP
 
 const ControllerBackend kBackends[] = {
     {CONTROLLER_ID_VESC_UART, "VESC", CONTROLLER_TRANSPORT_UART,
-     {false, true, true, false, true, false, false},
+     {false, true, true, false, true, false, false, true},
      VESC_UART_BEGIN, VESC_BACKEND_STOP, noReset, quiesceImmediately,
      noScan, noConnect, noDisconnect, nullptr, uartLinkStatus, noDiagnostics,
      VESC_BACKEND_POLL, VESC_CONNECTED_POLL_MS, 4096},
     {CONTROLLER_ID_VESC_BLE, "VESC", CONTROLLER_TRANSPORT_BLE,
-     {true, false, true, false, true, false, false},
+     {true, false, true, false, true, false, false, true},
      VESC_BLE_BEGIN, VESC_BACKEND_STOP, resetVescBle, quiesceVescBle,
      startVescScan, connectVesc, disconnectVesc, reconnectVesc, vescBleLinkStatus, noDiagnostics,
      VESC_BACKEND_POLL, VESC_CONNECTED_POLL_MS, 4096},
     {CONTROLLER_ID_FARDRIVER_BLE, "FarDriver", CONTROLLER_TRANSPORT_BLE,
-     {true, false, false, true, false, false, true},
+     {true, false, false, true, false, false, true, false},
      FARDRIVER_BEGIN, FARDRIVER_STOP, resetFarDriverBle, quiesceFarDriverBle,
      startFarDriverScan, connectFarDriver, disconnectFarDriver, reconnectFarDriver, farDriverLinkStatus,
      farDriverDiagnostics,
@@ -702,4 +702,30 @@ ControllerSnapshot controllerSnapshot() {
   snapshot.firmwareKnown = telemetryFirmwareVersion(snapshot.firmwareMajor, snapshot.firmwareMinor);
   return snapshot;
 }
+#endif
+
+// Cruise control. The capability comes from the active backend's caps, so it is
+// compiled in both builds; the engage calls reach the VESC backend on the device
+// and are no-ops on the host preview, which has no transport to command.
+bool controllerSupportsCruise() { return activeControllerBackend()->caps.supportsCruiseControl; }
+
+#ifndef CYD_LVGL_PREVIEW
+void controllerCruiseEngage() {
+  if (controllerSupportsCruise()) vescCruiseRequestEngage();
+}
+void controllerCruiseDisengage() {
+  if (controllerSupportsCruise()) vescCruiseRequestDisengage();
+}
+void controllerCruiseAdjustTarget(int deltaKmh) {
+  if (controllerSupportsCruise()) vescCruiseAdjustTarget(deltaKmh);
+}
+bool controllerCruiseActive(uint16_t &targetKmh) {
+  if (!controllerSupportsCruise()) return false;
+  return vescCruiseActive(targetKmh);
+}
+#else
+void controllerCruiseEngage() {}
+void controllerCruiseDisengage() {}
+void controllerCruiseAdjustTarget(int) {}
+bool controllerCruiseActive(uint16_t &) { return false; }
 #endif

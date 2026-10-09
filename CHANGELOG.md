@@ -20,6 +20,10 @@ the 320x240 panel -- or the generator will truncate them and say so. Entries are
 translated the way the rest of the interface is, because a changelog in six
 languages is not worth hand-maintaining.
 
+## 2026-10-09 — Cruise control & profiles
+
+Hold to engage cruise over a VESC link; four profiles store vehicle setups.
+
 ## 2026-10-06 — Battery chemistry
 
 Battery Configuration is one page, with Li-ion, LiPo, LiFePO4 and editable cell volts.

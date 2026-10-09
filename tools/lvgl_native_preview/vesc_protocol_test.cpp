@@ -183,6 +183,45 @@ void testFraming() {
          "payload refuses to overflow");
 }
 
+void testControlFraming() {
+  uint8_t payload[8] = {};
+  // SET_CURRENT 1.000 A (1000 mA), no CAN forward: one command id and the
+  // big-endian int32 argument.
+  size_t n = vescBuildControlPayload(VESC_COMM_SET_CURRENT, 0, 1000, payload, sizeof(payload));
+  expect(n == 5, "control payload without CAN forward is five bytes");
+  expect(payload[0] == VESC_COMM_SET_CURRENT, "control payload carries the command id");
+  expect(payload[1] == 0x00 && payload[2] == 0x00 && payload[3] == 0x03 && payload[4] == 0xE8,
+         "control argument is big-endian int32");
+
+  // A negative argument keeps its two's-complement bits.
+  vescBuildControlPayload(VESC_COMM_SET_DUTY, 0, -620, payload, sizeof(payload));
+  expect(payload[1] == 0xFF && payload[2] == 0xFF && payload[3] == 0xFD && payload[4] == 0x94,
+         "control argument encodes negatives");
+
+  // CAN forward wraps the command id and the argument together.
+  n = vescBuildControlPayload(VESC_COMM_SET_RPM, 17, 4000, payload, sizeof(payload));
+  expect(n == 7, "control payload with CAN forward is seven bytes");
+  expect(payload[0] == VESC_COMM_FORWARD_CAN && payload[1] == 17 && payload[2] == VESC_COMM_SET_RPM,
+         "control CAN forward wrapping");
+  expect(payload[3] == 0x00 && payload[4] == 0x00 && payload[5] == 0x0F && payload[6] == 0xA0,
+         "control CAN argument follows the command id");
+
+  // The frame carries the payload and its CRC. The {34,17,6,0,0,3,0xE8} CRC was
+  // worked out with Python's binascii.crc_hqx, stored high byte first.
+  const uint8_t canPayload[] = {34, 17, 6, 0x00, 0x00, 0x03, 0xE8};
+  uint8_t frame[16] = {};
+  const size_t frameLen = vescBuildFrame(canPayload, sizeof(canPayload), frame, sizeof(frame));
+  expect(frameLen == sizeof(canPayload) + 5, "control frame length");
+  expect(frame[0] == 2 && frame[1] == sizeof(canPayload) && frame[frameLen - 1] == 3,
+         "control frame delimiters");
+  expect(frame[frameLen - 3] == 0xB5 && frame[frameLen - 2] == 0xC1, "control frame CRC bytes");
+
+  expect(vescBuildControlPayload(VESC_COMM_SET_RPM, 17, 4000, payload, 6) == 0,
+         "control payload refuses to overflow");
+  expect(vescBuildControlPayload(VESC_COMM_SET_RPM, 0, 4000, payload, 4) == 0,
+         "control payload without CAN refuses to overflow");
+}
+
 }  // namespace
 
 int main() {
@@ -191,6 +230,7 @@ int main() {
   testSetupValues();
   testFwVersion();
   testFraming();
+  testControlFraming();
   if (failures == 0) printf("vesc_protocol: all checks passed\n");
   return failures == 0 ? 0 : 1;
 }

@@ -66,6 +66,34 @@ size_t vescBuildCommandPayload(uint8_t command, uint8_t canId, uint8_t *out, siz
   return n;
 }
 
+size_t vescBuildControlPayload(uint8_t command, uint8_t canId, int32_t value, uint8_t *out, size_t cap) {
+  const size_t needed = canId != 0 ? 7u : 5u;
+  if (!out || cap < needed) return 0;
+  size_t n = 0;
+  if (canId != 0) {
+    out[n++] = VESC_COMM_FORWARD_CAN;
+    out[n++] = canId;
+  }
+  out[n++] = command;
+  const uint32_t raw = (uint32_t)value;
+  out[n++] = (uint8_t)(raw >> 24);
+  out[n++] = (uint8_t)(raw >> 16);
+  out[n++] = (uint8_t)(raw >> 8);
+  out[n++] = (uint8_t)(raw & 0xFF);
+  return n;
+}
+
+int32_t vescEncodeDuty(float duty) {
+  if (!isfinite(duty)) return 0;
+  const float clamped = fmaxf(-1.0F, fminf(1.0F, duty));
+  return (int32_t)lroundf(clamped * VESC_DUTY_SCALE);
+}
+
+int32_t vescEncodeCurrent(float amps) {
+  if (!isfinite(amps)) return 0;
+  return (int32_t)lroundf(amps * VESC_CURRENT_SCALE);
+}
+
 size_t vescBuildFrame(const uint8_t *payload, uint8_t payloadLen, uint8_t *out, size_t cap) {
   if (!payload || !out || payloadLen == 0) return 0;
   const size_t frameLen = (size_t)payloadLen + 5u;

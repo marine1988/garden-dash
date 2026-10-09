@@ -4,7 +4,9 @@
 
 #include <Arduino.h>
 
+#include "app_state.h"
 #include "config.h"
+#include "cruise_control.h"
 #include "fardriver_ble.h"
 #include "vesc_ble.h"
 #include "vesc_protocol.h"
@@ -38,6 +40,14 @@ uint32_t farDriverRideStartedAtMs = 0;
 bool farDriverAnnounced = false;
 
 const uint32_t VESC_REPLY_TIMEOUT_MS = 100;
+
+// Cruise control state, owned by the telemetry task. The request slot and the
+// published runtime share one critical section: the UI writes a request and
+// reads the active state, the task drains the request and writes the state.
+portMUX_TYPE cruiseMux = portMUX_INITIALIZER_UNLOCKED;
+volatile uint8_t cruiseRequestPending = 0;  // 0 none, 1 engage, 2 disengage
+volatile int16_t cruiseAdjustPending = 0;   // km/h nudge to apply once
+CruiseRuntime cruiseRuntime = {};
 
 float wheelCircumferenceMeters() {
   return PI * wheelDiameterMm / 1000.0F;
@@ -76,6 +86,15 @@ void vescSendPacket(const uint8_t *payload, uint8_t len) {
   uint8_t frame[16];
   const size_t frameLen = vescBuildFrame(payload, len, frame, sizeof(frame));
   if (frameLen && vescTransport) vescTransport->write(frame, frameLen);
+}
+
+// Writes one SET_* control frame. Unlike vescRequest this expects no reply: the
+// controller arms its command timeout on receipt and never answers, so waiting
+// would only stall the poll loop and cost a telemetry frame.
+void vescSendControl(uint8_t command, int32_t value) {
+  uint8_t payload[8];
+  const size_t n = vescBuildControlPayload(command, vescCanId, value, payload, sizeof(payload));
+  if (n) vescSendPacket(payload, (uint8_t)n);
 }
 
 bool vescReadByte(uint8_t &out, uint32_t deadline) {
@@ -281,6 +300,14 @@ ControllerPollResult vescBackendPoll(ControllerSample &out) {
       liveSetupValid = false;
       vescFwMajor = 0;
       vescFwMinor = 0;
+      // The link is gone, so a commanded cruise cannot be held or released:
+      // drop it to idle here. The controller's own command timeout has already
+      // released the motor, so nothing is left coasting.
+      portENTER_CRITICAL(&cruiseMux);
+      cruiseRuntime.state = CRUISE_STATE_OFF;
+      cruiseRuntime.targetKmh = 0;
+      cruiseRuntime.targetRpm = 0;
+      portEXIT_CRITICAL(&cruiseMux);
       Serial.println("VESC telemetry disconnected");
     }
     return CONTROLLER_POLL_NO_SAMPLE;
@@ -294,6 +321,16 @@ ControllerPollResult vescBackendPoll(ControllerSample &out) {
     liveSetupValid = false;
     setupFailures = 0;
     countersFromSetup = false;
+    // A fresh link starts with cruise idle: whatever was commanded belonged to
+    // the previous session and must not resume silently.
+    portENTER_CRITICAL(&cruiseMux);
+    cruiseRuntime.state = CRUISE_STATE_OFF;
+    cruiseRuntime.targetKmh = 0;
+    cruiseRuntime.targetRpm = 0;
+    cruiseRuntime.lastCommandMs = 0;
+    cruiseRequestPending = 0;
+    cruiseAdjustPending = 0;
+    portEXIT_CRITICAL(&cruiseMux);
     Serial.println("VESC telemetry connected");
   }
   vescConnected = true;
@@ -301,7 +338,79 @@ ControllerPollResult vescBackendPoll(ControllerSample &out) {
   updateSetupValues();
   updateFirmwareVersion(now);
   fillVescSample(out, now);
+
+  // Cruise control runs on the sample just built, from the telemetry task that
+  // owns the transport. The settings are the display's own globals, read here
+  // exactly as the drivetrain figures above are.
+  {
+    uint8_t request = 0;
+    int16_t adjust = 0;
+    portENTER_CRITICAL(&cruiseMux);
+    request = cruiseRequestPending;
+    cruiseRequestPending = 0;
+    adjust = cruiseAdjustPending;
+    cruiseAdjustPending = 0;
+    portEXIT_CRITICAL(&cruiseMux);
+
+    CruiseSettings settings = {};
+    settings.enabled = cruiseControlEnabled;
+    settings.holdTimeDeciS = cruiseHoldTimeDeciS;
+    settings.minSpeedKmh = cruiseMinSpeedKmh;
+    settings.maxSpeedKmh = cruiseMaxSpeedKmh;
+    settings.deadbandHundredths = cruiseDeadbandHundredths;
+    settings.allowedModes = cruiseAllowedModes;
+
+    CruiseInputs inputs = {};
+    inputs.speedKmh = (float)out.values.speedKmh;
+    inputs.rpm = vescData.rpm;
+    inputs.faultCode = (uint8_t)vescData.faultCode;
+    // VESC standard telemetry carries no ride mode, so the mode filter cannot
+    // reject anything; cruiseModeAllowed treats 0 as "not reported".
+    inputs.rideMode = 0;
+    inputs.linkLive = true;  // this poll just produced a sample
+    const float trim = speedCalibration();
+    const float driveRatio = max(1, (int)vescDriveRatioHundredths) / 100.0F;
+    const float polePairs = max<uint8_t>(1, vescMotorPolePairs);
+    const float circumference = wheelCircumferenceMeters();
+    inputs.rpmPerKmh = circumference > 0.0F
+                           ? polePairs * driveRatio / (circumference * 0.06F * trim)
+                           : 0.0F;
+
+    CruiseOutput control = {};
+    portENTER_CRITICAL(&cruiseMux);
+    if (adjust != 0) cruiseControlAdjustTarget(cruiseRuntime, settings, adjust);
+    control = cruiseControlStep(cruiseRuntime, settings, inputs, request == 1, request == 2, now);
+    portEXIT_CRITICAL(&cruiseMux);
+    if (control.send) vescSendControl(control.command, control.value);
+  }
   return CONTROLLER_POLL_UPDATED;
+}
+
+void vescCruiseRequestEngage() {
+  portENTER_CRITICAL(&cruiseMux);
+  cruiseRequestPending = 1;
+  portEXIT_CRITICAL(&cruiseMux);
+}
+
+void vescCruiseRequestDisengage() {
+  portENTER_CRITICAL(&cruiseMux);
+  cruiseRequestPending = 2;
+  portEXIT_CRITICAL(&cruiseMux);
+}
+
+void vescCruiseAdjustTarget(int deltaKmh) {
+  portENTER_CRITICAL(&cruiseMux);
+  cruiseAdjustPending = (int16_t)deltaKmh;
+  portEXIT_CRITICAL(&cruiseMux);
+}
+
+bool vescCruiseActive(uint16_t &targetKmh) {
+  bool active = false;
+  portENTER_CRITICAL(&cruiseMux);
+  active = cruiseRuntime.state == CRUISE_STATE_ACTIVE;
+  if (active) targetKmh = cruiseRuntime.targetKmh;
+  portEXIT_CRITICAL(&cruiseMux);
+  return active;
 }
 
 void farDriverBackendBegin() {

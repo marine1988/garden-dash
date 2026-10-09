@@ -191,6 +191,7 @@ struct ControllerCapabilities {
   bool readsConfiguration;     // can pull limits from the controller
   bool writesConfiguration;    // reserved; nothing does this yet
   bool reportsRideMode;        // the UI can offer controller ride modes
+  bool supportsCruiseControl;  // the link accepts the VESC SET_* control commands
 };
 ```
 
@@ -201,6 +202,11 @@ wizard shows a list.
 `writesConfiguration` is listed while false everywhere on purpose. The
 read-only notices consult it, so that the day a write path exists the UI stops
 claiming otherwise by itself.
+
+`supportsCruiseControl` is true for both VESC links and false for FarDriver,
+whose protocol has no equivalent of `COMM_SET_RPM`. It is what the cruise screen
+reads before offering to engage, and what `controllerCruiseEngage()` checks
+before leaving a request for the telemetry task.
 
 ## Link control: shared types
 

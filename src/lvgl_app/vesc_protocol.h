@@ -18,12 +18,21 @@
 enum : uint8_t {
   VESC_COMM_FW_VERSION = 0,
   VESC_COMM_GET_VALUES = 4,
+  // Control commands. Each carries one signed 32-bit argument and is not
+  // answered: the controller arms a command timeout as it accepts them and
+  // releases the motor if they stop arriving, so a caller sends them on a
+  // heartbeat rather than once.
+  VESC_COMM_SET_DUTY = 5,
+  VESC_COMM_SET_CURRENT = 6,
+  VESC_COMM_SET_CURRENT_BRAKE = 7,
+  VESC_COMM_SET_RPM = 8,
   VESC_COMM_FORWARD_CAN = 34,
   VESC_COMM_GET_VALUES_SETUP = 47,
 };
 
-// Longest frame this module builds: CAN-forward prefix plus one command id.
-enum : size_t { VESC_MAX_COMMAND_FRAME = 8 };
+// Longest frame this module builds: CAN-forward prefix, one command id, and the
+// four-byte argument a SET_* command carries.
+enum : size_t { VESC_MAX_COMMAND_FRAME = 16 };
 
 // The COMM_GET_VALUES fields this firmware consumes. The packet carries more
 // (avg_id, avg_iq, pid position, controller id); they are skipped
@@ -62,6 +71,23 @@ float vescEstimatePhasePeakVoltage(float batteryVoltage, float dutyCycle);
 // Builds the payload for a command, optionally wrapped in a CAN forward.
 // Returns the payload length, or 0 if `cap` is too small.
 size_t vescBuildCommandPayload(uint8_t command, uint8_t canId, uint8_t *out, size_t cap);
+
+// Builds the payload for a SET_* control command, which carries one signed
+// 32-bit argument (duty x1e5, current in milli-amps, or eRPM), optionally
+// wrapped in a CAN forward. Returns the payload length, or 0 if `cap` is too
+// small. Deliberately separate from vescBuildCommandPayload: a control command
+// takes an argument and gets no reply, so callers send the frame and move on
+// instead of waiting for a response the controller never sends.
+size_t vescBuildControlPayload(uint8_t command, uint8_t canId, int32_t value, uint8_t *out, size_t cap);
+
+// The scaling the VESC firmware applies to each control argument (its own
+// commands.c: duty / 1e5, current / 1e3 A). eRPM is sent unscaled. Both clamp
+// their input to the command's range and return 0 for a non-finite value, so a
+// caller cannot send a NaN as a motor current.
+constexpr float VESC_DUTY_SCALE = 1.0e5F;
+constexpr float VESC_CURRENT_SCALE = 1.0e3F;
+int32_t vescEncodeDuty(float duty);
+int32_t vescEncodeCurrent(float amps);
 
 // Wraps a payload in start/length/CRC/stop. Returns the frame length, or 0 if
 // the payload does not fit `cap`.

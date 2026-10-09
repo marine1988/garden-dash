@@ -26,6 +26,7 @@ set(FIRMWARE_SOURCES
   "${PROJECT_ROOT}/src/lvgl_app/ride_replay.cpp"
   "${PROJECT_ROOT}/src/lvgl_app/app_logic.cpp"
   "${PROJECT_ROOT}/src/lvgl_app/controller_manager.cpp"
+  "${PROJECT_ROOT}/src/lvgl_app/cruise_control.cpp"
   "${PROJECT_ROOT}/src/lvgl_app/cyd_icons_1bit.cpp"
   "${PROJECT_ROOT}/src/lvgl_app/dashboards.cpp"
   "${PROJECT_ROOT}/src/lvgl_app/screens.cpp"
@@ -155,6 +156,13 @@ if(CYD_BUILD_TESTS OR CYD_BUILD_SIMULATOR)
   add_executable(cyd_vesc_sender_test vesc_sender_test.cpp
                  "${CMAKE_CURRENT_LIST_DIR}/../../src/lvgl_app/vesc_protocol.cpp")
   add_test(NAME cyd_vesc_sender COMMAND cyd_vesc_sender_test)
+  # The cruise state machine is pure logic, so it links only its own module and
+  # the protocol constants it names.
+  add_executable(cyd_cruise_control_test cruise_control_test.cpp
+                 "${CMAKE_CURRENT_LIST_DIR}/../../src/lvgl_app/cruise_control.cpp"
+                 "${CMAKE_CURRENT_LIST_DIR}/../../src/lvgl_app/vesc_protocol.cpp")
+  target_include_directories(cyd_cruise_control_test PRIVATE "${PROJECT_ROOT}/src/lvgl_app")
+  add_test(NAME cyd_cruise_control COMMAND cyd_cruise_control_test)
   add_executable(cyd_preferences_test preferences_test.cpp Preferences.cpp)
   target_include_directories(cyd_preferences_test PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
   add_test(

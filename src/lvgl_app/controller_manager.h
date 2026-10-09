@@ -162,6 +162,10 @@ struct ControllerCapabilities {
   bool readsConfiguration;
   bool writesConfiguration;
   bool reportsRideMode;
+  // True when the link accepts the VESC SET_* control commands, so the display
+  // can hold a cruise setpoint. False for the FarDriver link, which has no
+  // equivalent command.
+  bool supportsCruiseControl;
 };
 
 enum ControllerBackendId : uint8_t {
@@ -243,6 +247,19 @@ void controllerResetAllSettings();
 bool controllerQuiesceForFirmwareUpdate();
 bool controllerQuiesceForCompanion();
 ControllerSnapshot controllerSnapshot();
+
+// Cruise control, driven by the telemetry task that owns the controller link.
+// `controllerSupportsCruise()` is false on a FarDriver link and on the host
+// preview, where the engage calls are no-ops. A request is applied on the task's
+// next poll, so `controllerCruiseActive()` reflects the state one poll later;
+// engage and disengage are edge requests, not levels.
+bool controllerSupportsCruise();
+void controllerCruiseEngage();
+void controllerCruiseDisengage();
+// Nudges the active target by `deltaKmh`, clamped to the configured window.
+void controllerCruiseAdjustTarget(int deltaKmh);
+// False when cruise is idle. `targetKmh` is written only while active.
+bool controllerCruiseActive(uint16_t &targetKmh);
 
 #ifdef CYD_LVGL_PREVIEW
 void previewSetControllerTelemetryFields(TelemetryFieldMask available, TelemetryFieldMask derived);

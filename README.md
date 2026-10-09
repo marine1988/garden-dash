@@ -122,6 +122,11 @@ settings screen, and the ride replay views.
 - **Signed firmware updates over Bluetooth**, with rollback-safe dual-slot OTA
 - **Auto-brightness** from the front light sensor, and an optional ambient RGB
   LED that follows the accent colour
+- **Cruise control** over a VESC link: hold to engage, and release on a tap,
+  braking below the minimum speed, a controller fault or a lost link
+- **Controller profiles**: four saved vehicle setups (speed modes, cruise
+  ceiling, current and power figures) to apply; a profile sets the display's own
+  figures and never rewrites the controller's stored configuration
 - First-boot setup, PIN lock, six languages, metric, imperial and nautical units
 - Works on both CYD panel revisions (ILI9341 and the ST7789-type), detected
   automatically
@@ -157,9 +162,13 @@ screens, not a mock-up. Task layout, data flow and threading rules are in
 
 ## Safety
 
-The current firmware displays and records telemetry. Controller profiles and
-settings adjustment are planned; this version does not change controller
-settings or control the vehicle. It is not safety equipment.
+The firmware displays and records telemetry. It also offers a display-side cruise
+control, which holds the current speed by sending the VESC's own `COMM_SET_RPM`
+setpoint: engage it with a deliberate hold, and it releases on a tap, on braking
+below the configured minimum, on a controller fault, or when the link drops. It
+never rewrites the controller's stored configuration. Treat it as an assist, not
+as safety equipment, and keep your hand on the brake the first few times you use
+it.
 
 Range, state of charge and wear estimates are derived, and can drift from reality;
 check anything important with VESC Tool or a meter.
