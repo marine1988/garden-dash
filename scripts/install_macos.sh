@@ -27,6 +27,7 @@ MONITOR_SPEED="115200"
 
 REPO="$REPO_DEFAULT"
 DIR="$DIR_DEFAULT"
+DIR_WAS_SET=0
 PORT=""
 DO_FLASH=1
 DO_MONITOR=0
@@ -86,8 +87,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --port) PORT="${2:-}"; [ -n "$PORT" ] || die "--port needs a device path"; shift 2 ;;
     --port=*) PORT="${1#*=}"; shift ;;
-    --dir) DIR="${2:-}"; [ -n "$DIR" ] || die "--dir needs a path"; shift 2 ;;
-    --dir=*) DIR="${1#*=}"; shift ;;
+    --dir) DIR="${2:-}"; [ -n "$DIR" ] || die "--dir needs a path"; DIR_WAS_SET=1; shift 2 ;;
+    --dir=*) DIR="${1#*=}"; DIR_WAS_SET=1; shift ;;
     --repo) REPO="${2:-}"; [ -n "$REPO" ] || die "--repo needs a URL"; shift 2 ;;
     --repo=*) REPO="${1#*=}"; shift ;;
     --no-flash) DO_FLASH=0; shift ;;
@@ -187,6 +188,12 @@ else
 fi
 
 # ── 2. Checkout ──────────────────────────────────────────────────────────────
+
+# Run from inside a checkout and it builds that one instead of cloning a nested
+# copy; running ./scripts/install_macos.sh is exactly this case.
+if [ "$DIR_WAS_SET" -eq 0 ] && [ -f "./platformio.ini" ] && [ -d "./src/lvgl_app" ]; then
+  DIR="."
+fi
 
 if [ -d "$DIR/.git" ]; then
   step "Using existing checkout at $DIR"
