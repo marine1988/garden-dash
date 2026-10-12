@@ -121,6 +121,37 @@ add_pio_paths() {
 
 find_pio() { command -v pio 2>/dev/null || true; }
 
+# The Python PlatformIO runs its tools with. On a Homebrew or pipx install this
+# is the launcher's own virtualenv, not any system python.
+pio_python() {
+  "$PIO" system info 2>/dev/null | sed -n 's/^Python Executable *//p' | head -1
+}
+
+# PlatformIO builds esptool from a downloaded package whose own post-install
+# script installs its Python deps (intelhex among them) into the package's
+# _contrib directory. In the field that post-install is sometimes skipped, and
+# recent esptool imports intelhex unconditionally at module load, so an ESP32
+# build dies at bootloader.bin with "No module named 'intelhex'". Make sure the
+# module is importable by the Python PlatformIO runs, and by the legacy penv if
+# one exists.
+ensure_python_module() {
+  local mod="$1" py
+  for py in "$(pio_python)" "$HOME/.platformio/penv/bin/python"; do
+    [ -n "$py" ] || continue
+    [ -x "$py" ] || continue
+    if "$py" -c "import $mod" >/dev/null 2>&1; then
+      continue
+    fi
+    info "installing the '$mod' module PlatformIO's tools need"
+    if ! "$py" -m pip install --quiet "$mod" >/dev/null 2>&1; then
+      # A uv/pipx venv has no pip of its own until ensurepip bootstraps it.
+      "$py" -m ensurepip --upgrade >/dev/null 2>&1 || true
+      "$py" -m pip install --quiet "$mod" >/dev/null 2>&1 ||
+        warn "could not install '$mod' into $py"
+    fi
+  done
+}
+
 add_pio_paths
 PIO=$(find_pio)
 
@@ -215,7 +246,33 @@ fi
 
 step "Building the firmware (first run downloads the ESP32 toolchain, ~2 GB, and takes a few minutes)"
 info "environment: $ENV_NAME"
-run "$PIO" run -e "$ENV_NAME" --project-dir "$DIR"
+
+build_firmware() { "$PIO" run -e "$ENV_NAME" --project-dir "$DIR"; }
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  printf '    %s[dry-run]%s %s run -e %s --project-dir %s\n' "$DIM" "$RESET" "$PIO" "$ENV_NAME" "$DIR"
+else
+  # Recent esptool imports intelhex unconditionally, and PlatformIO's own copy
+  # of it is not always complete. Make sure it is importable before the build
+  # so a first run does not have to fail to reveal it.
+  ensure_python_module intelhex
+  BUILD_LOG=$(mktemp)
+  if build_firmware 2>&1 | tee "$BUILD_LOG"; then
+    rm -f "$BUILD_LOG"
+  elif grep -q "intelhex" "$BUILD_LOG"; then
+    # Installing intelhex into PlatformIO's python did not stick. Its own copy
+    # lives inside the downloaded esptool package; re-fetching that package
+    # re-runs the post-install that populates it.
+    warn "esptool still cannot find intelhex; re-fetching its package"
+    rm -f "$BUILD_LOG"
+    rm -rf "$HOME/.platformio/packages/tool-esptoolpy"
+    ensure_python_module intelhex
+    build_firmware || die "build still failed after refreshing esptool (see the output above)"
+  else
+    rm -f "$BUILD_LOG"
+    die "build failed (see the output above)"
+  fi
+fi
 
 # ── 5. Flash ─────────────────────────────────────────────────────────────────
 
