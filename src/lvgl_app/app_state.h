@@ -156,7 +156,6 @@ enum SubmenuType {
   SUBMENU_CONTROLLER_CONFIG,
   SUBMENU_SPEED,
   SUBMENU_CONNECTION,
-  SUBMENU_POWER_LIMITS,
   SUBMENU_SPEED_CALIBRATION,
   SUBMENU_GAUGE_RANGES,
   SUBMENU_PIN,
@@ -363,20 +362,22 @@ void resetBatteryStats();
 BatteryStats getBatteryStats();
 
 // A saved vehicle setup the rider can switch between. Applying a profile copies
-// its numbers into the live speed-mode and cruise settings; the display never
-// rewrites the controller's own configuration, which would reboot the motor and
-// touch its flash, so a profile is a display-side preset the rider can trust and
-// the cruise loop honours. `name` is a short label shown in the list.
+// its numbers into the live settings; the display never rewrites the controller's
+// own configuration, which would reboot the motor and touch its flash, so a
+// profile is a display-side preset the rider can trust and the cruise loop
+// honours. Its fields are exactly the ones the values editor shows: what a
+// profile stores is what the rider can set. `name` is a short label for the list.
 struct ControllerProfile {
   char name[12];
   uint32_t mode1Kmh;
   uint32_t mode2Kmh;
   uint32_t mode3Kmh;
+  uint32_t topSpeedKmh;
   uint16_t cruiseMaxKmh;
   uint16_t maxBatteryAmps;
   uint16_t maxMotorAmps;
-  uint16_t maxPowerDeciKw;
-  uint8_t accelPercent;
+  uint16_t contPowerDeciKw;
+  uint16_t peakPowerDeciKw;
   bool valid;
 };
 
@@ -414,6 +415,7 @@ extern DashboardAppearanceMode dashboardAppearanceMode;
 extern Language language;
 extern UnitMode unitMode;
 extern SubmenuType submenuType;
+extern uint8_t profilePage;  // 0..2 within SUBMENU_PROFILES (slots / values / save-clear)
 extern char oemName[16];
 extern char vehicleName[24];
 extern char motorName[24];

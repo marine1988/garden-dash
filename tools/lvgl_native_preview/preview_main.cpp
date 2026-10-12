@@ -564,8 +564,6 @@ int main(int argc, char **argv) {
       {"20_connection_uart", SUBMENU_CONNECTION, 0, CONTROLLER_ID_VESC_UART},
       {"20_connection_ble", SUBMENU_CONNECTION, 0, CONTROLLER_ID_VESC_BLE},
       {"20_connection_fardriver", SUBMENU_CONNECTION, 0, CONTROLLER_ID_FARDRIVER_BLE},
-      {"20_power_vesc", SUBMENU_POWER_LIMITS, 0, CONTROLLER_ID_VESC_UART},
-      {"20_power_fardriver", SUBMENU_POWER_LIMITS, 0, CONTROLLER_ID_FARDRIVER_BLE},
       {"21_calibration", SUBMENU_SPEED_CALIBRATION, 0, CONTROLLER_ID_FARDRIVER_BLE},
       {"21_gauge_ranges", SUBMENU_GAUGE_RANGES, 0, CONTROLLER_ID_VESC_UART},
       {"22_modes_vesc", SUBMENU_SPEED, 0, CONTROLLER_ID_VESC_UART},
@@ -873,8 +871,12 @@ int main(int argc, char **argv) {
       showSubmenu(output, SUBMENU_PROFILES, 0, false, "34_profiles_slots");
       if (stopAfterSelected()) return 0;
     }
+    if (selected("34_profiles_values")) {
+      showSubmenu(output, SUBMENU_PROFILES, 1, false, "34_profiles_values");
+      if (stopAfterSelected()) return 0;
+    }
     if (selected("34_profiles_manage")) {
-      showSubmenu(output, SUBMENU_PROFILES, 1, false, "34_profiles_manage");
+      showSubmenu(output, SUBMENU_PROFILES, 2, false, "34_profiles_manage");
       if (stopAfterSelected()) return 0;
     }
 

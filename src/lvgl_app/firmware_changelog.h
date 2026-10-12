@@ -16,6 +16,11 @@ struct FirmwareChangelogEntry {
 
 static const FirmwareChangelogEntry kFirmwareChangelog[] = {
     {
+        "2026-10-13",
+        "Editable profiles",
+        "Profiles gain a values page; dead Power & Current and VESC Ride Modes cards go.",
+    },
+    {
         "2026-10-09",
         "Cruise control & profiles",
         "Hold to engage cruise over a VESC link; four profiles store vehicle setups.",
@@ -29,11 +34,6 @@ static const FirmwareChangelogEntry kFirmwareChangelog[] = {
         "2026-10-06",
         "Theme previews at real time",
         "Theme previews run at 1x; fast demo rides still train gauge ranges between updates.",
-    },
-    {
-        "2026-10-06",
-        "Smoother dashboard updates",
-        "Needles glide, unchanged values skip redraws, and overlay slides pause dashboard updates.",
     },
 };
 

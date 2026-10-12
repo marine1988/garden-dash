@@ -229,26 +229,40 @@ standard telemetry does not report a profile. Back traverses pages before
 returning to the parent; Next is absent on the final page. Field editors preserve
 the originating section and page. Use `makeMenuTopBar`, without extra arrows.
 
-Power & Current currently directs riders to the controller's configuration app;
-neither backend implements writes. Gauge ranges are explicitly local display
-scales, never controller limits. Future write support must use separate confirmed
-and pending settings, explicit application, and read-back verification. Do not
-connect the existing gauge-scale globals to controller configuration writes.
+Controller configuration writes are not implemented by any backend, so no card
+here claims to change the controller's own limits. Gauge ranges are explicitly
+local display scales, never controller limits. Power & Current was a dead end (a
+notice telling the rider to use VESC Tool), so it and the VESC-side Ride Modes
+card are gone: the Configuration hub offers only cards that do something. Future
+write support must use separate confirmed and pending settings, explicit
+application, and read-back verification. Do not connect the existing gauge-scale
+globals to controller configuration writes.
 
-Cruise Control and Profiles join Configuration as its fifth and sixth sections
-(the hub is a 2x3 grid of cards). Cruise holds the current speed with the VESC's
-own `COMM_SET_RPM` setpoint: the engage tile is a hold of `cruiseHoldTimeDeciS`,
-a tap cancels at once, and the telemetry task releases on a controller fault, a
-lost link, or speed dropping under `cruiseMinSpeedKmh`. Its four numbers are
-edited through `INPUT_CRUISE_VALUE` rather than the vehicle-field editor, because
-they are their own globals. Profiles store four vehicle setups (speed modes,
-cruise ceiling, current and power figures) and apply them to the display's own
-globals; a profile never rewrites the controller's configuration, so it stays
-clear of the write path above. Native states `34_controller_hub`,
-`34_cruise_window`, `34_cruise_modes`, `34_profiles_slots` and
-`34_profiles_manage` cover them; check Finnish and German as usual.
+Cruise Control and Profiles are the hub's other two cards (`controllerConfigSections`
+builds the list, so the screen and its handler cannot disagree): Ride Modes stays
+only on FarDriver, which reports gears, and Cruise only on a VESC link. Cruise
+holds the current speed with the VESC's own `COMM_SET_RPM` setpoint: the engage
+tile is a hold of `cruiseHoldTimeDeciS`, a tap cancels at once, and the telemetry
+task releases on a controller fault, a lost link, or speed dropping under
+`cruiseMinSpeedKmh`. Its four numbers are edited through `INPUT_CRUISE_VALUE`
+rather than the vehicle-field editor, because they are their own globals.
 
-Native states `19_controller_config_*`, `20_connection_*`, `20_power_*`,
+Profiles is three pages. Slots (page 1) list four saved setups: tap a saved one
+to apply it, an empty one to capture the current setup into it. Values (page 2)
+is the editor the rider asked for: a 3x3 grid of the eight figures a profile
+stores -- the three ride-mode limits, the top-speed scale they clamp to, and the
+battery, motor, continuous and peak power figures -- plus the cruise ceiling,
+which carries its own option id because it is not a vehicle field. Every other
+tile reuses the standard vehicle-field editor, so the ride-mode limits (which
+had no screen before) are now editable. Save & clear (page 3) copies the live
+values into the selected slot or clears it; saving is explicit, never automatic.
+A profile sets the display's own globals and never rewrites the controller's
+configuration, so it stays clear of the write path above. Native states
+`34_controller_hub`, `34_cruise_window`, `34_cruise_modes`, `34_profiles_slots`,
+`34_profiles_values` and `34_profiles_manage` cover them; check Finnish and
+German as usual.
+
+Native states `19_controller_config_*`, `20_connection_*`,
 `21_calibration`, `21_gauge_ranges`, `22_modes_*`, `23_mode_labels` and
 `27_battery_submenu`, `27_battery_lifepo4`, `27_battery_cells` and
 `27_battery_cells_edited` cover these sections. Custom gear labels are capped at 12 bytes;

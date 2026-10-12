@@ -110,7 +110,7 @@ static constexpr const char *kBarGraphProfileRevisionKey = "barsProfileRev";
 // Increment when the ControllerProfile layout changes. Stored in NVS beside the
 // blob; a mismatch discards the stored profiles rather than reading them back
 // shifted.
-static constexpr uint8_t kControllerProfileRevision = 1;
+static constexpr uint8_t kControllerProfileRevision = 2;
 static constexpr const char *kControllerProfileRevisionKey = "profRev";
 static const uint8_t kDashboardDataCounts[MODE_COUNT] = {
     8, 8, 3, 11, 4, 3, 7, 4, 7, 5, 4, 4,
@@ -1384,9 +1384,9 @@ static bool persistedControllerProfilesKnown = false;
 
 static bool sameControllerProfile(const ControllerProfile &a, const ControllerProfile &b) {
   return strncmp(a.name, b.name, sizeof(a.name)) == 0 && a.mode1Kmh == b.mode1Kmh && a.mode2Kmh == b.mode2Kmh &&
-         a.mode3Kmh == b.mode3Kmh && a.cruiseMaxKmh == b.cruiseMaxKmh && a.maxBatteryAmps == b.maxBatteryAmps &&
-         a.maxMotorAmps == b.maxMotorAmps && a.maxPowerDeciKw == b.maxPowerDeciKw &&
-         a.accelPercent == b.accelPercent && a.valid == b.valid;
+         a.mode3Kmh == b.mode3Kmh && a.topSpeedKmh == b.topSpeedKmh && a.cruiseMaxKmh == b.cruiseMaxKmh &&
+         a.maxBatteryAmps == b.maxBatteryAmps && a.maxMotorAmps == b.maxMotorAmps &&
+         a.contPowerDeciKw == b.contPowerDeciKw && a.peakPowerDeciKw == b.peakPowerDeciKw && a.valid == b.valid;
 }
 
 static bool sameControllerProfiles(const ControllerProfile *a, const ControllerProfile *b) {
@@ -1420,11 +1420,12 @@ void saveControllerProfile(uint8_t index, const char *name) {
   p.mode1Kmh = speedMode1Kmh;
   p.mode2Kmh = speedMode2Kmh;
   p.mode3Kmh = speedMode3Kmh;
+  p.topSpeedKmh = topSpeedKmh;
   p.cruiseMaxKmh = cruiseMaxSpeedKmh;
   p.maxBatteryAmps = batteryMaxAmps;
   p.maxMotorAmps = motorMaxAmps;
-  p.maxPowerDeciKw = continuousPowerDeciKw;
-  p.accelPercent = speedAccelCurvePercent;
+  p.contPowerDeciKw = continuousPowerDeciKw;
+  p.peakPowerDeciKw = peakPowerDeciKw;
   p.valid = true;
   saveAppSettings();
 }
@@ -1432,14 +1433,17 @@ void saveControllerProfile(uint8_t index, const char *name) {
 void applyControllerProfile(uint8_t index) {
   if (index >= kControllerProfileCount || !controllerProfiles[index].valid) return;
   const ControllerProfile &p = controllerProfiles[index];
-  speedMode1Kmh = p.mode1Kmh;
-  speedMode2Kmh = p.mode2Kmh;
-  speedMode3Kmh = p.mode3Kmh;
+  topSpeedKmh = p.topSpeedKmh;
+  // The mode limits are clamped to the top speed, so set it first and keep the
+  // profile's own order even if a hand-edited slot had them the other way round.
+  speedMode1Kmh = min(p.mode1Kmh, topSpeedKmh);
+  speedMode2Kmh = min(p.mode2Kmh, topSpeedKmh);
+  speedMode3Kmh = min(p.mode3Kmh, topSpeedKmh);
   cruiseMaxSpeedKmh = p.cruiseMaxKmh;
   batteryMaxAmps = p.maxBatteryAmps;
   motorMaxAmps = p.maxMotorAmps;
-  continuousPowerDeciKw = p.maxPowerDeciKw;
-  speedAccelCurvePercent = p.accelPercent;
+  continuousPowerDeciKw = p.contPowerDeciKw;
+  peakPowerDeciKw = p.peakPowerDeciKw;
   // Keep the cruise window ordered after the profile moves the ceiling.
   if (cruiseMinSpeedKmh >= cruiseMaxSpeedKmh) cruiseMinSpeedKmh = cruiseMaxSpeedKmh > 1 ? cruiseMaxSpeedKmh - 1 : 0;
   activeControllerProfile = index;

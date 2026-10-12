@@ -102,8 +102,6 @@ NAMES = [
     "20_connection_ble",
     "20_connection_fardriver",
     "20_connection_bluetooth_off",
-    "20_power_vesc",
-    "20_power_fardriver",
     "21_calibration",
     "21_gauge_ranges",
     "21_gauge_ranges_manual",
@@ -178,6 +176,7 @@ NAMES = [
     "34_cruise_window",
     "34_cruise_modes",
     "34_profiles_slots",
+    "34_profiles_values",
     "34_profiles_manage",
     "28_first_boot_config",
     "28_vehicle_name_input",
@@ -206,6 +205,8 @@ def find_executable() -> Path:
     candidates = [
         BUILD / "Release" / "cyd_lvgl_renderer.exe",
         BUILD / "cyd_lvgl_renderer.exe",
+        BUILD / "Release" / "cyd_lvgl_renderer",
+        BUILD / "cyd_lvgl_renderer",
     ]
     for path in candidates:
         if path.exists():
@@ -225,17 +226,13 @@ def build_renderer(reconfigure: bool = False) -> Path:
     if reconfigure and BUILD.exists():
         shutil.rmtree(BUILD)
     BUILD.mkdir(parents=True, exist_ok=True)
-    run([
-        "cmake",
-        "-Wno-dev",
-        "-S",
-        str(SOURCE),
-        "-B",
-        str(BUILD),
-        "-A",
-        "x64",
-        f"-DLVGL_DIR={LVGL}",
-    ])
+    configure = ["cmake", "-Wno-dev", "-S", str(SOURCE), "-B", str(BUILD)]
+    # -A picks a Visual Studio platform and is only valid with the MSVC
+    # generator; the default generator on macOS and Linux rejects it.
+    if sys.platform.startswith("win"):
+        configure += ["-A", "x64"]
+    configure.append(f"-DLVGL_DIR={LVGL}")
+    run(configure)
     run(["cmake", "--build", str(BUILD), "--config", "Release", "--target", "cyd_lvgl_preview"])
     return find_executable()
 

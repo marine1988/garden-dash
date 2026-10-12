@@ -131,9 +131,11 @@ static int dashGridThemeAt(int displayIndex) {
 static uint8_t vehiclePage = 0;
 static uint8_t speedPage = 0;
 static uint8_t displayPage = 0;
-// CRUISE CONTROL and PROFILES both split their content over two pages.
+// CRUISE CONTROL splits its content over two pages; PROFILES over three (slots,
+// values, save & clear). profilePage is not static so the runtime input test can
+// confirm a value edit returns the rider to the values page.
 static uint8_t cruisePage = 0;
-static uint8_t profilePage = 0;
+uint8_t profilePage = 0;
 // DISPLAY PANEL: profile choice, then tuning over grey and colour ramps.
 static constexpr uint8_t kPanelPageCount = 2;
 static uint8_t panelPage = 0;
@@ -254,6 +256,45 @@ static uint8_t collectVisibleFields(const uint8_t *source, uint8_t sourceCount, 
   return count;
 }
 
+// The Configuration hub's cards, built rather than fixed so the screen and its
+// action handler can never disagree, and so a card only appears when it has
+// something to do: Ride Modes is a FarDriver page (that link reports gears),
+// and cruise needs a VESC link that accepts the control commands. That leaves
+// four cards on either link.
+static uint8_t controllerConfigSections(SubmenuType *out) {
+  uint8_t n = 0;
+  if (controllerUsesFarDriverBle()) out[n++] = SUBMENU_SPEED;
+  out[n++] = SUBMENU_SPEED_CALIBRATION;
+  out[n++] = SUBMENU_GAUGE_RANGES;
+  out[n++] = SUBMENU_PROFILES;
+  if (controllerSupportsCruise()) out[n++] = SUBMENU_CRUISE;
+  return n;
+}
+
+// One line under each hub card. Kept beside controllerConfigSections so a card
+// cannot gain a section without a description.
+static const char *controllerConfigDescription(SubmenuType type) {
+  switch (type) {
+    case SUBMENU_SPEED:
+      return txt("Gears and labels", "Vaihteet ja nimet", "Gänge und Namen", "Rapports et noms",
+                 "Marchas y nombres", "Marce e nomi");
+    case SUBMENU_SPEED_CALIBRATION:
+      return txt("Wheel and road speed", "Pyörä ja nopeus", "Rad und Tempo", "Roue et vitesse",
+                 "Rueda y velocidad", "Ruota e velocità");
+    case SUBMENU_GAUGE_RANGES:
+      return txt("Display scales only", "Vain näyttöasteikot", "Nur Anzeigeskalen", "Échelles écran",
+                 "Escalas pantalla", "Scale display");
+    case SUBMENU_PROFILES:
+      return txt("Saved vehicle setups", "Tallennetut kokoonpanot", "Gespeicherte Setups",
+                 "Configurations enregistrées", "Ajustes guardados", "Setup salvati");
+    case SUBMENU_CRUISE:
+      return txt("Hold a speed", "Pidä nopeus", "Tempo halten", "Maintenir la vitesse",
+                 "Mantener velocidad", "Mantieni velocità");
+    default:
+      return "";
+  }
+}
+
 static uint8_t vehicleProfileFieldCount() {
   uint8_t fields[sizeof(kVehicleProfileFields)];
   return collectVisibleFields(kVehicleProfileFields, sizeof(kVehicleProfileFields), fields);
@@ -305,9 +346,27 @@ enum CruiseOption {
   kCruiseOptModeSport,
   kCruiseOptEngage,
 };
-// Slots occupy 0..kControllerProfileCount-1, then the two manage actions.
+// Slots occupy 0..kControllerProfileCount-1. The manage page uses two more ids;
+// the values page carries real field ids, plus one id of its own for the cruise
+// ceiling (which is not a vehicle field). 40 is clear of the field id space,
+// which ends at SPEED_FIELD_BASE + SPEED_FIELD_COUNT.
 constexpr int kProfileOptSave = kControllerProfileCount;
 constexpr int kProfileOptClear = kControllerProfileCount + 1;
+constexpr int kProfileOptCruiseMax = 40;
+
+// The values a profile stores, and the only values the editor shows. Speeds are
+// the three ride-mode limits the dashboard already displays, plus the top-speed
+// scale they clamp to; then the current and power figures. One 3x3 grid.
+static const uint8_t kProfileFields[] = {
+    SPEED_FIELD_BASE + SPEED_FIELD_MODE_1,
+    SPEED_FIELD_BASE + SPEED_FIELD_MODE_2,
+    SPEED_FIELD_BASE + SPEED_FIELD_MODE_3,
+    SPEED_FIELD_BASE + SPEED_FIELD_TOP_SPEED,
+    VEHICLE_FIELD_BATTERY_MAX_A,
+    VEHICLE_FIELD_MOTOR_MAX_A,
+    VEHICLE_FIELD_CONT_KW,
+    VEHICLE_FIELD_PEAK_KW,
+};
 
 static TextInputContext textInputContext = INPUT_VEHICLE_FIELD;
 static char pendingSecurityPin[5] = "";
@@ -3785,7 +3844,7 @@ static uint8_t submenuItemCount() {
     case SUBMENU_CRUISE:
       return 2;
     case SUBMENU_PROFILES:
-      return 2;
+      return 3;
     default:
       return 1;
   }
@@ -3888,7 +3947,9 @@ static const char *submenuCurrentName() {
     case SUBMENU_PROFILES:
       if (profilePage == 0)
         return txt("Saved setups", "Tallennetut kokoonpanot", "Gespeicherte Setups", "Configurations enregistrées", "Ajustes guardados", "Setup salvati");
-      return txt("Manage slots", "Hallitse paikkoja", "Slots verwalten", "Gérer les emplacements", "Gestionar ranuras", "Gestisci slot");
+      if (profilePage == 1)
+        return txt("Values", "Arvot", "Werte", "Valeurs", "Valores", "Valori");
+      return txt("Save & clear", "Tallenna ja tyhjennä", "Speichern & leeren", "Enregistrer & vider", "Guardar y vaciar", "Salva e svuota");
     default:
       return "";
   }
@@ -4303,8 +4364,15 @@ static void submenuAction(int id) {
       if (submenuType == SUBMENU_SPEED && speedPage > 0) {
         speedPage--; queueRebuild(SCREEN_SUBMENU); return;
       }
-      if (submenuType == SUBMENU_SPEED || submenuType == SUBMENU_POWER_LIMITS ||
-          submenuType == SUBMENU_SPEED_CALIBRATION || submenuType == SUBMENU_GAUGE_RANGES) {
+      if (submenuType == SUBMENU_PROFILES && profilePage > 0) {
+        profilePage--; queueRebuild(SCREEN_SUBMENU); return;
+      }
+      if (submenuType == SUBMENU_CRUISE && cruisePage > 0) {
+        cruisePage--; queueRebuild(SCREEN_SUBMENU); return;
+      }
+      if (submenuType == SUBMENU_SPEED || submenuType == SUBMENU_SPEED_CALIBRATION ||
+          submenuType == SUBMENU_GAUGE_RANGES || submenuType == SUBMENU_PROFILES ||
+          submenuType == SUBMENU_CRUISE) {
         submenuType = SUBMENU_CONTROLLER_CONFIG;
         queueRebuild(SCREEN_SUBMENU); return;
       }
@@ -4467,10 +4535,10 @@ static void submenuAction(int id) {
       queueRebuild(SCREEN_SUBMENU);
       return;
     case SUBMENU_CONTROLLER_CONFIG: {
-      const SubmenuType sections[] = {SUBMENU_POWER_LIMITS, SUBMENU_SPEED, SUBMENU_SPEED_CALIBRATION,
-                                       SUBMENU_GAUGE_RANGES, SUBMENU_PROFILES, SUBMENU_CRUISE};
-      if (option < 0 || option >= 6) return;
-      submenuType = sections[option]; speedPage = 0;
+      SubmenuType sections[6];
+      const uint8_t count = controllerConfigSections(sections);
+      if (option < 0 || option >= (int)count) return;
+      submenuType = sections[option]; speedPage = 0; profilePage = 0; cruisePage = 0;
       queueRebuild(SCREEN_SUBMENU); return;
     }
     case SUBMENU_BATTERY_CELLS:
@@ -4542,18 +4610,38 @@ static void submenuAction(int id) {
       queueRebuild(SCREEN_MENU);
       return;
     case SUBMENU_PROFILES:
-      if (option >= 0 && option < kControllerProfileCount) {
+      if (profilePage == 0) {
+        // Slots: apply a saved one, or capture the current setup into an empty
+        // slot under its prepared name.
+        if (option < 0 || option >= kControllerProfileCount) return;
         if (controllerProfiles[option].valid) {
           applyControllerProfile(option);
           queueStatusNotice(NOTICE_PROFILE_APPLIED);
         } else {
-          // An empty slot captures the live setup under its prepared name.
           saveControllerProfile(option, controllerProfiles[option].name);
           activeControllerProfile = option;
           saveAppSettings();
           queueStatusNotice(NOTICE_PROFILE_SAVED);
         }
         queueRebuild(SCREEN_SUBMENU);
+        return;
+      }
+      if (profilePage == 1) {
+        // Values: the same editor every other local setting uses, so a bump in
+        // one place cannot make a profile value uneditable here. The cruise
+        // ceiling is the one field of its own.
+        if (option == kProfileOptCruiseMax) {
+          cruiseTextField = CRUISE_FIELD_MAX_SPEED;
+          textInputContext = INPUT_CRUISE_VALUE;
+          queueRebuild(SCREEN_TEXT_INPUT);
+          return;
+        }
+        if (vehicleFieldIsText(option) || vehicleFieldIsNumeric(option)) {
+          vehicleTextField = option;
+          textInputContext = INPUT_VEHICLE_FIELD;
+          queueRebuild(SCREEN_TEXT_INPUT);
+          return;
+        }
         return;
       }
       if (option == kProfileOptSave) {
@@ -5684,7 +5772,6 @@ static void showDashUiGrid(lv_obj_t *scr, const char *title) {
 static const char *vehicleSectionTitle(SubmenuType type) {
   switch (type) {
     case SUBMENU_CONNECTION: return txt("CONNECTION", "YHTEYS", "VERBINDUNG", "CONNEXION", "CONEXIÓN", "CONNESSIONE");
-    case SUBMENU_POWER_LIMITS: return txt("POWER & CURRENT", "TEHO JA VIRTA", "LEISTUNG / STROM", "PUISSANCE", "POTENCIA", "POTENZA");
     case SUBMENU_SPEED: return txt("RIDE MODES", "AJOTILAT", "FAHRMODI", "MODES", "MODOS", "MODALITÀ");
     case SUBMENU_SPEED_CALIBRATION: return txt("CALIBRATION", "KALIBROINTI", "KALIBRIERUNG", "ÉTALONNAGE", "CALIBRACIÓN", "CALIBRAZIONE");
     case SUBMENU_GAUGE_RANGES: return txt("GAUGE RANGES", "MITTARIASTEIKOT", "ANZEIGESKALEN", "ÉCHELLES", "ESCALAS", "SCALE");
@@ -5820,18 +5907,12 @@ static void showSubmenu() {
 
   if (submenuType == SUBMENU_CONTROLLER_CONFIG) {
     makeMenuTopBar(scr, txt("CONFIGURATION", "ASETUKSET", "KONFIGURATION", "CONFIGURATION", "CONFIGURACIÓN", "CONFIGURAZIONE"), 1, 1, false);
-    const SubmenuType sections[] = {SUBMENU_POWER_LIMITS, SUBMENU_SPEED, SUBMENU_SPEED_CALIBRATION,
-                                     SUBMENU_GAUGE_RANGES, SUBMENU_PROFILES, SUBMENU_CRUISE};
-    const char *descriptions[] = {
-      txt("Controller limits", "Ohjaimen rajat", "Controllerlimits", "Limites contrôleur", "Límites controlador", "Limiti controller"),
-      controllerUsesFarDriverBle() ? txt("Gears and labels", "Vaihteet ja nimet", "Gänge und Namen", "Rapports et noms", "Marchas y nombres", "Marce e nomi") : txt("Profile status", "Profiilin tila", "Profilstatus", "État du profil", "Estado perfil", "Stato profilo"),
-      txt("Wheel and road speed", "Pyörä ja nopeus", "Rad und Tempo", "Roue et vitesse", "Rueda y velocidad", "Ruota e velocità"),
-      txt("Display scales only", "Vain näyttöasteikot", "Nur Anzeigeskalen", "Échelles écran", "Escalas pantalla", "Scale display"),
-      txt("Saved vehicle setups", "Tallennetut kokoonpanot", "Gespeicherte Setups", "Configurations enregistrées", "Ajustes guardados", "Setup salvati"),
-      txt("Hold a speed", "Pidä nopeus", "Tempo halten", "Maintenir la vitesse", "Mantener velocidad", "Mantieni velocità")};
-    for (int i = 0; i < 6; ++i)
+    SubmenuType sections[6];
+    const uint8_t count = controllerConfigSections(sections);
+    for (uint8_t i = 0; i < count; ++i)
       makeMenuButton(scr, i % 2 ? kTwoColRightX : kMenuEdgeX, 48 + (i / 2) * 58,
-                     i % 2 ? kTwoColRightW : kTwoColLeftW, 54, vehicleSectionTitle(sections[i]), descriptions[i], false, BTN_OPTION_BASE + i);
+                     i % 2 ? kTwoColRightW : kTwoColLeftW, 54, vehicleSectionTitle(sections[i]),
+                     controllerConfigDescription(sections[i]), false, BTN_OPTION_BASE + i);
     loadScreen(scr); return;
   }
   if (submenuType == SUBMENU_CONNECTION) {
@@ -5881,13 +5962,6 @@ static void showSubmenu() {
     makeLabelAt(scr, 160, 47, txt("Saved on this display", "Tallennus näyttöön", "Auf Display gespeichert", "Stocké sur écran", "Guardado en pantalla", "Salvato sul display"), cyd_ui::secondaryText(), &lv_font_rajdhani_12, 3);
     if (submenuType == SUBMENU_SPEED_CALIBRATION) makeVehicleFields(scr, kCalibrationFields, sizeof(kCalibrationFields));
     else makeVehicleFields(scr, kGaugeFields, sizeof(kGaugeFields));
-    loadScreen(scr); return;
-  }
-  if (submenuType == SUBMENU_POWER_LIMITS) {
-    makeMenuTopBar(scr, vehicleSectionTitle(submenuType), 1, 1, false);
-    makeVehicleExplanation(scr, controllerUsesFarDriverBle()
-      ? txt("Use the FarDriver app to change battery current, phase current and gear limits. Controller writes are not supported here yet.", "Muuta akkuvirtaa, vaihevirtaa ja vaihderajoja FarDriver-sovelluksessa. Näyttö ei vielä kirjoita ohjainasetuksia.", "Batteriestrom, Phasenstrom und Ganglimits in der FarDriver-App ändern. Schreiben wird hier noch nicht unterstützt.", "Modifiez les courants et rapports dans FarDriver. Écriture non prise en charge ici.", "Cambie corrientes y marchas en FarDriver. Escritura aún no disponible aquí.", "Modifica correnti e marce in FarDriver. Scrittura non ancora disponibile qui.")
-      : txt("Use VESC Tool to change battery current, motor current and power limits. Controller writes are not supported here yet.", "Muuta akkuvirtaa, moottorivirtaa ja tehorajoja VESC Toolissa. Näyttö ei vielä kirjoita ohjainasetuksia.", "Batteriestrom, Motorstrom und Leistungslimits in VESC Tool ändern. Schreiben wird hier noch nicht unterstützt.", "Modifiez courants et puissance dans VESC Tool. Écriture non prise en charge ici.", "Cambie corrientes y potencia en VESC Tool. Escritura aún no disponible aquí.", "Modifica correnti e potenza in VESC Tool. Scrittura non ancora disponibile qui."));
     loadScreen(scr); return;
   }
   if (submenuType == SUBMENU_SPEED) {
@@ -5970,7 +6044,7 @@ static void showSubmenu() {
   }
 
   if (submenuType == SUBMENU_PROFILES) {
-    profilePage = min<uint8_t>(profilePage, 1);
+    profilePage = min<uint8_t>(profilePage, 2);
     makeMenuTopBar(scr, vehicleSectionTitle(SUBMENU_PROFILES), profilePage + 1, submenuItemCount(), true);
     if (profilePage == 0) {
       for (uint8_t i = 0; i < kControllerProfileCount; ++i) {
@@ -5985,7 +6059,29 @@ static void showSubmenu() {
       }
       makeExplanationAt(
           scr, 168,
-          txt("Tap an empty slot to save the current setup; tap a saved one to apply it.", "Tallenna nykyinen asetelma tyhjään paikkaan; käytä tallennettua napauttamalla.", "Leeren Slot tippen, um das aktuelle Setup zu speichern; gespeicherten tippen zum Anwenden.", "Touchez un emplacement vide pour enregistrer, un enregistré pour l'appliquer.", "Toca una ranura vacía para guardar, una guardada para aplicar.", "Tocca uno slot vuoto per salvare, uno salvato per applicare."));
+          txt("Tap an empty slot to save your setup into it, then set its values on the next page.",
+              "Tallenna asetelma tyhjään paikkaan ja aseta arvot seuraavalla sivulla.",
+              "Leeren Slot tippen, um dein Setup zu speichern, dann die Werte auf der nächsten Seite setzen.",
+              "Touchez un slot vide pour y enregistrer votre configuration, puis réglez les valeurs sur la page suivante.",
+              "Toca una ranura vacía para guardar tu ajuste, luego fija los valores en la página siguiente.",
+              "Tocca uno slot vuoto per salvarvi il setup, poi imposta i valori nella pagina successiva."));
+    } else if (profilePage == 1) {
+      // A 3x3 grid: the eight values a profile stores, then the cruise ceiling,
+      // which is not a vehicle field and carries its own option id.
+      for (uint8_t i = 0; i < sizeof(kProfileFields); ++i) {
+        char value[32];
+        vehicleFieldValue(kProfileFields[i], value, sizeof(value));
+        const int col = i % 3;
+        const int row = i / 3;
+        const int x = col == 0 ? kMenuEdgeX : (col == 1 ? kThreeColX1 : kThreeColX2);
+        makeMenuButton(scr, x, 48 + row * 58, kThreeColW, 54, vehicleFieldTitle(kProfileFields[i]), value,
+                       false, BTN_OPTION_BASE + kProfileFields[i]);
+      }
+      char cruiseValue[24];
+      snprintf(cruiseValue, sizeof(cruiseValue), "%u km/h", cruiseMaxSpeedKmh);
+      makeMenuButton(scr, kThreeColX2, 164, kThreeColW, 54,
+                     txt("CRUISE MAX", "VAKIONOP MAX", "TEMPOMAT MAX", "RÉGUL. MAX", "CRUCERO MÁX", "CRUISE MAX"),
+                     cruiseValue, false, BTN_OPTION_BASE + kProfileOptCruiseMax);
     } else {
       const bool haveActive = activeControllerProfile < kControllerProfileCount;
       makeMenuButton(scr, kMenuEdgeX, 48, kMenuContentW, 58,
@@ -5999,7 +6095,7 @@ static void showSubmenu() {
                          "VIDER L'EMPLACEMENT", "VACIAR RANURA", "SVUOTA SLOT"),
                      haveActive ? controllerProfiles[activeControllerProfile].name : "",
                      false, BTN_OPTION_BASE + kProfileOptClear);
-      makeExplanationAt(scr, 176, txt("Applying a profile sets its speed and power figures. It never rewrites the controller's own configuration.", "Profiilin käyttö asettaa sen nopeus- ja teholuvut. Se ei koskaan kirjoita ohjaimen omia asetuksia.", "Ein Profil setzt dessen Tempo- und Leistungswerte. Es schreibt nie die Controller-Konfiguration.", "Appliquer un profil définit ses valeurs. Il ne réécrit jamais la configuration du contrôleur.", "Aplicar un perfil fija sus valores. Nunca reescribe la configuración del controlador.", "Applicare un profilo imposta i valori. Non riscrive mai la configurazione del controller."));
+      makeExplanationAt(scr, 176, txt("Save copies the values on the previous page into the selected slot. A profile never rewrites the controller's own configuration.", "Tallenna kopioi edellisen sivun arvot valittuun paikkaan. Profiili ei koskaan kirjoita ohjaimen omia asetuksia.", "Speichern übernimmt die Werte der vorigen Seite in den gewählten Slot. Ein Profil schreibt nie die Controller-Konfiguration.", "Enregistrer copie les valeurs de la page précédente dans l'emplacement choisi. Un profil ne réécrit jamais la configuration du contrôleur.", "Guardar copia los valores de la página anterior en la ranura elegida. Un perfil nunca reescribe la configuración del controlador.", "Salva copia i valori della pagina precedente nello slot scelto. Un profilo non riscrive mai la configurazione del controller."));
     }
     loadScreen(scr); return;
   }
@@ -8188,7 +8284,7 @@ void uiPreviewSetSubmenu(SubmenuType type, uint8_t page, bool customSpeed) {
   displayPage = page % displayPageCount();
   panelPage = page % kPanelPageCount;
   cruisePage = page % 2;
-  profilePage = page % 2;
+  profilePage = page % 3;
   speedSetupMode = customSpeed ? SPEED_SETUP_CUSTOM : SPEED_SETUP_PRESET;
   resetConfirmMode = -1;
   if (type == SUBMENU_DASH_UI && !colorPaletteOpen) dashUiGridOpen = true;

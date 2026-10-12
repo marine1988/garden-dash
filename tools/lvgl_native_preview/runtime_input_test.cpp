@@ -281,7 +281,9 @@ int main() {
   controllerConnection = CONTROLLER_CONNECTION_BLE;
   uiPreviewSetSubmenu(SUBMENU_CONTROLLER_CONFIG, 0, false);
   uiShow(SCREEN_SUBMENU);
-  tap(240, 90);
+  // The hub builds its cards from controllerConfigSections(): FarDriver leads
+  // with Ride Modes, so it is the first card (left column, top row).
+  tap(70, 90);
   if (!expect(submenuType == SUBMENU_SPEED, "Ride Modes tile did not open modes")) return 1;
   tap(275, 22);
   if (!expect(hasLabel(lv_scr_act(), "Low gear label"), "Next did not open gear labels") ||
@@ -296,7 +298,61 @@ int main() {
   tap(40, 22);
   if (!expect(submenuType == SUBMENU_CONTROLLER_CONFIG, "Back did not return to configuration")) return 1;
 
+  // Profiles are why this change exists: the ride-mode limits had no screen at
+  // all before. The Values page must expose them (and the cruise ceiling)
+  // through the shared editor, and SAVE must copy the live figures into the
+  // selected slot -- explicitly, only when the rider asks.
   controllerType = CONTROLLER_VESC;
+  controllerConnection = CONTROLLER_CONNECTION_UART;
+  uiPreviewSetControllerBackend(CONTROLLER_VESC, CONTROLLER_CONNECTION_UART);
+  resetControllerProfile(0);
+  activeControllerProfile = 0xFF;
+  uiPreviewSetSubmenu(SUBMENU_PROFILES, 1, false);
+  uiShow(SCREEN_SUBMENU);
+  cyd::preview::advanceTime(200);
+  if (!expect(tapLabel(vehicleFieldTitle(SPEED_FIELD_BASE + SPEED_FIELD_MODE_1)),
+              "profile values page hid the ride-mode limits") ||
+      !expectScreen(SCREEN_TEXT_INPUT, "ride-mode limit editor"))
+    return 1;
+  tap(40, 22);
+  cyd::preview::advanceTime(200);
+  if (!expect(submenuType == SUBMENU_PROFILES && profilePage == 1,
+              "cancelling a value edit lost the profile values page"))
+    return 1;
+  if (!expect(tapLabel("CRUISE MAX"), "profile values page hid the cruise ceiling") ||
+      !expectScreen(SCREEN_TEXT_INPUT, "cruise ceiling editor"))
+    return 1;
+  tap(40, 22);
+  cyd::preview::advanceTime(200);
+
+  // Capture the live setup into slot 0, edit a value, SAVE, and confirm the
+  // slot followed: explicit save, never automatic.
+  speedMode1Kmh = 33; speedMode2Kmh = 44; speedMode3Kmh = 55; topSpeedKmh = 120;
+  uiPreviewSetSubmenu(SUBMENU_PROFILES, 0, false);
+  uiShow(SCREEN_SUBMENU);
+  cyd::preview::advanceTime(200);
+  tap(70, 90);  // slot 0 (left column, top row)
+  cyd::preview::advanceTime(200);
+  if (!expect(controllerProfiles[0].valid && activeControllerProfile == 0,
+              "tapping an empty slot did not capture the live setup") ||
+      !expect(controllerProfiles[0].mode1Kmh == 33 && controllerProfiles[0].topSpeedKmh == 120,
+              "captured profile missed a live value"))
+    return 1;
+  speedMode1Kmh = 77;
+  uiPreviewSetSubmenu(SUBMENU_PROFILES, 2, false);
+  uiShow(SCREEN_SUBMENU);
+  cyd::preview::advanceTime(200);
+  tap(70, 90);  // SAVE tile (first on the manage page)
+  cyd::preview::advanceTime(200);
+  if (!expect(controllerProfiles[0].mode1Kmh == 77 && controllerProfiles[0].mode2Kmh == 44,
+              "SAVE did not copy the edited value into the slot"))
+    return 1;
+  speedMode1Kmh = 5; speedMode2Kmh = 6; speedMode3Kmh = 7; topSpeedKmh = 200;
+  applyControllerProfile(0);
+  if (!expect(speedMode1Kmh == 77 && speedMode2Kmh == 44 && speedMode3Kmh == 55 && topSpeedKmh == 120,
+              "applying a profile did not restore its limits"))
+    return 1;
+
   uiPreviewSetSubmenu(SUBMENU_SPEED, 0, false);
   uiShow(SCREEN_SUBMENU);
   if (!expect(!hasLabel(lv_scr_act(), "NEXT >"), "VESC offered unsupported gear labels")) return 1;
