@@ -124,9 +124,11 @@ settings screen, and the ride replay views.
   LED that follows the accent colour
 - **Cruise control** over a VESC link: hold to engage, and release on a tap,
   braking below the minimum speed, a controller fault or a lost link
-- **Controller profiles**: four saved vehicle setups (speed modes, cruise
-  ceiling, current and power figures) to apply; a profile sets the display's own
-  figures and never rewrites the controller's stored configuration
+- **Controller profiles**: three saved vehicle setups matching VESC Tool's own
+  profiles -- forward and reverse speed limits, drive and brake current scales
+  and field weakening -- written to the controller when applied and read back to
+  confirm, plus display-side extras (cruise ceiling, gauge and power figures).
+  The limits are applied in the controller's RAM; its flash is never written
 - First-boot setup, PIN lock, six languages, metric, imperial and nautical units
 - Works on both CYD panel revisions (ILI9341 and the ST7789-type), detected
   automatically
@@ -165,10 +167,14 @@ screens, not a mock-up. Task layout, data flow and threading rules are in
 The firmware displays and records telemetry. It also offers a display-side cruise
 control, which holds the current speed by sending the VESC's own `COMM_SET_RPM`
 setpoint: engage it with a deliberate hold, and it releases on a tap, on braking
-below the configured minimum, on a controller fault, or when the link drops. It
-never rewrites the controller's stored configuration. Treat it as an assist, not
-as safety equipment, and keep your hand on the brake the first few times you use
-it.
+below the configured minimum, on a controller fault, or when the link drops.
+Controller profiles go further and set the controller's live speed and current
+limits (VESC Tool's own profile fields, plus field weakening) through
+`COMM_SET_MCCONF_TEMP` with `store=0` and a LispBM `conf-set`, then read them
+back to confirm. Both paths apply in the controller's RAM only: neither writes
+its flash, so the stored configuration is never changed. Treat all of it as an
+assist, not as safety equipment, and keep your hand on the brake the first few
+times you use it.
 
 Range, state of charge and wear estimates are derived, and can drift from reality;
 check anything important with VESC Tool or a meter.

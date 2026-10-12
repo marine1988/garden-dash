@@ -247,20 +247,34 @@ task releases on a controller fault, a lost link, or speed dropping under
 `cruiseMinSpeedKmh`. Its four numbers are edited through `INPUT_CRUISE_VALUE`
 rather than the vehicle-field editor, because they are their own globals.
 
-Profiles is three pages. Slots (page 1) list four saved setups: tap a saved one
-to apply it, an empty one to capture the current setup into it. Values (page 2)
-is the editor the rider asked for: a 3x3 grid of the eight figures a profile
-stores -- the three ride-mode limits, the top-speed scale they clamp to, and the
-battery, motor, continuous and peak power figures -- plus the cruise ceiling,
-which carries its own option id because it is not a vehicle field. Every other
-tile reuses the standard vehicle-field editor, so the ride-mode limits (which
-had no screen before) are now editable. Save & clear (page 3) copies the live
-values into the selected slot or clears it; saving is explicit, never automatic.
-A profile sets the display's own globals and never rewrites the controller's
-configuration, so it stays clear of the write path above. Native states
-`34_controller_hub`, `34_cruise_window`, `34_cruise_modes`, `34_profiles_slots`,
-`34_profiles_values` and `34_profiles_manage` cover them; check Finnish and
-German as usual.
+Profiles is four pages, modelled on VESC Tool's own profiles and, unlike
+everything above, they are written to the controller. Slots (page 1) list three
+saved setups: tapping one selects it for editing, and an empty one is filled
+from the current display setup first. Controller limits (page 2) is the five
+numbers VESC Tool's profiles carry -- forward and reverse speed limits, the
+drive and brake current scales, and the field-weakening current -- entered with
+the shared numeric editor; these go to the controller when the profile is
+applied. Display extras (page 3) is the cruise ceiling, gauge full scale and the
+battery, motor, continuous and peak power figures: kept with the profile, never
+sent anywhere. Apply and manage (page 4) applies the profile after a
+confirmation, re-captures the display extras, or clears the slot.
+
+Applying writes the speed limits and current scales with COMM_SET_MCCONF_TEMP
+and store=0, so they land in the controller's RAM and never in its flash -- the
+same path VESC Tool uses. Field weakening has no field in that command, so it
+goes out as the LispBM expression the scooter-support package uses,
+`(conf-set 'foc-fw-current-max N)`, which also applies in RAM. Because
+SET_MCCONF_TEMP writes every field it carries, the task reads the controller's
+current limits first (COMM_GET_MCCONF_TEMP) and echoes the duty and power limits
+back unchanged, so a profile cannot silently widen them. It then reads the
+limits back and only reports the profile applied when the reply matches; the
+limits page shows that read-back on its CTRL line. The three steps run on the
+telemetry task (it owns the transport), paced by the LispBM REPL's one-command-
+per-0.5 s limit, exactly like cruise control. None of this touches the flash, so
+the write path above stays reserved for a future, separately confirmed feature.
+Native states `34_controller_hub`, `34_cruise_window`, `34_cruise_modes`,
+`34_profiles_slots`, `34_profiles_limits`, `34_profiles_extras` and
+`34_profiles_manage` cover them; check Finnish and German as usual.
 
 Native states `19_controller_config_*`, `20_connection_*`,
 `21_calibration`, `21_gauge_ranges`, `22_modes_*`, `23_mode_labels` and

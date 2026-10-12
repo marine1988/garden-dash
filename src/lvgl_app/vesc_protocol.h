@@ -28,6 +28,19 @@ enum : uint8_t {
   VESC_COMM_SET_RPM = 8,
   VESC_COMM_FORWARD_CAN = 34,
   VESC_COMM_GET_VALUES_SETUP = 47,
+  // Live controller-profile write and read over UART. COMM_SET_MCCONF_TEMP
+  // applies current scales, speed (ERPM), duty and power limits in the
+  // controller's RAM; sending store=false leaves its flash untouched, which is
+  // the path VESC Tool's own profiles use. COMM_GET_MCCONF_TEMP reads the same
+  // values back to confirm the write and to show the controller's own numbers.
+  VESC_COMM_SET_MCCONF_TEMP = 48,
+  VESC_COMM_GET_MCCONF_TEMP = 91,
+  // Runs one LispBM expression. The controller restarts LispBM if it is not
+  // running, so this needs no script loaded. Field weakening has no
+  // SET_MCCONF_TEMP field; (conf-set 'foc-fw-current-max X) is the only route,
+  // and it also applies in RAM. The firmware rate-limits it to one command per
+  // 0.5 s, so callers must not send these back to back.
+  VESC_COMM_LISP_REPL_CMD = 138,
 };
 
 // Longest frame this module builds: CAN-forward prefix, one command id, and the
@@ -98,3 +111,58 @@ size_t vescBuildFrame(const uint8_t *payload, uint8_t payloadLen, uint8_t *out, 
 bool vescParseValues(const uint8_t *payload, size_t len, VescValues &out);
 bool vescParseSetupValues(const uint8_t *payload, size_t len, VescSetupValues &out);
 bool vescParseFwVersion(const uint8_t *payload, size_t len, uint8_t &major, uint8_t &minor);
+
+// One live controller profile: the values COMM_SET_MCCONF_TEMP carries. Scales
+// are fractions (0..1) of the controller's configured current; the ERPM limits
+// are signed (the minimum is the reverse limit). The battery-current limits are
+// optional and only sent when includeInCurrent is set.
+struct VescProfileValues {
+  float currentMinScale;
+  float currentMaxScale;
+  float minErpm;
+  float maxErpm;
+  float minDuty;
+  float maxDuty;
+  float wattMin;
+  float wattMax;
+  bool includeInCurrent;
+  float inCurrentMin;
+  float inCurrentMax;
+};
+
+// The COMM_GET_MCCONF_TEMP reply fields read back to confirm a profile took and
+// to show the rider the controller's own numbers rather than the display's.
+struct VescMcconfTemp {
+  float currentMinScale;
+  float currentMaxScale;
+  float minErpm;
+  float maxErpm;
+  float minDuty;
+  float maxDuty;
+  float wattMin;
+  float wattMax;
+  float inCurrentMin;
+  float inCurrentMax;
+};
+
+// VESC's compact float: a 24-bit significand with an 8-bit exponent folded into
+// the top byte, written big-endian. Every field of the temp-config commands uses
+// it, so it must round-trip exactly with the controller's own codec.
+void vescAppendFloat32Auto(uint8_t *out, float value, size_t &index);
+float vescReadFloat32Auto(const uint8_t *buf, size_t &index);
+
+// Builds the COMM_SET_MCCONF_TEMP payload: command id, the four flag bytes
+// (store=false so the controller's flash is never written, no CAN forward, no
+// ack, no divide), then eight float32_auto limits, plus the battery-current
+// limits when includeInCurrent is set. Returns the payload length, or 0 if `cap`
+// is too small.
+size_t vescBuildMcconfTempPayload(const VescProfileValues &values, uint8_t *out, size_t cap);
+
+// Builds the COMM_LISP_REPL_CMD payload: command id, the expression text, and
+// the trailing NUL the firmware's string read expects. Returns the payload
+// length, or 0 for an empty expression or one that does not fit `cap`.
+size_t vescBuildLispPayload(const char *expression, uint8_t *out, size_t cap);
+
+// Parses a COMM_GET_MCCONF_TEMP reply. Validates the command id and a minimum
+// length before reading, and leaves `out` untouched when it returns false.
+bool vescParseMcconfTemp(const uint8_t *payload, size_t len, VescMcconfTemp &out);

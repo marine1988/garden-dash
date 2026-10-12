@@ -2,6 +2,8 @@
 #include <Arduino.h>
 #include <lvgl.h>
 
+#include "vesc_protocol.h"  // VescMcconfTemp, the controller's read-back profile
+
 // Shared state and logic for the LVGL firmware. These enums, settings and
 // formatting helpers began as a mirror of the pre-LVGL app, which no longer
 // exists in the tree; nothing is kept in parity with it.
@@ -361,37 +363,55 @@ void resetBatteryStats();
 // lock; the preview build stubs it).
 BatteryStats getBatteryStats();
 
-// A saved vehicle setup the rider can switch between. Applying a profile copies
-// its numbers into the live settings; the display never rewrites the controller's
-// own configuration, which would reboot the motor and touch its flash, so a
-// profile is a display-side preset the rider can trust and the cruise loop
-// honours. Its fields are exactly the ones the values editor shows: what a
-// profile stores is what the rider can set. `name` is a short label for the list.
+// A saved vehicle setup the rider can switch between, modelled on VESC Tool's
+// own profiles. Its first five fields are the ones the controller understands
+// and are written to a VESC when the profile is applied; the rest are extras the
+// display keeps for itself (the cruise ceiling and the gauge/power figures).
+// Applying a profile never writes the controller's flash: the speed and current
+// limits go out on COMM_SET_MCCONF_TEMP with store=0, and field weakening over
+// LispBM, both of which apply in RAM. `name` is a short label for the list.
 struct ControllerProfile {
   char name[12];
-  uint32_t mode1Kmh;
-  uint32_t mode2Kmh;
-  uint32_t mode3Kmh;
-  uint32_t topSpeedKmh;
+  uint16_t forwardSpeedKmh;
+  uint16_t reverseSpeedKmh;
+  uint16_t currentMaxScalePercent;  // motor / acceleration, 0..100
+  uint16_t currentMinScalePercent;  // brake, 0..100
+  uint16_t fieldWeakeningAmps;
+  // Display-side extras, saved with the profile and never written to the
+  // controller.
   uint16_t cruiseMaxKmh;
-  uint16_t maxBatteryAmps;
-  uint16_t maxMotorAmps;
-  uint16_t contPowerDeciKw;
+  uint16_t topSpeedKmh;
+  uint16_t batteryMaxAmps;
+  uint16_t motorMaxAmps;
+  uint16_t continuousPowerDeciKw;
   uint16_t peakPowerDeciKw;
   bool valid;
 };
 
-constexpr uint8_t kControllerProfileCount = 4;
+constexpr uint8_t kControllerProfileCount = 3;
 extern ControllerProfile controllerProfiles[kControllerProfileCount];
 // Index of the profile last applied, or 0xFF when none has been chosen.
 extern uint8_t activeControllerProfile;
-// Copies the profile's numbers into the live settings and records it as active.
-// Refuses an empty slot or an out-of-range index.
+// Copies a profile's display extras into the live settings and records it as
+// active. Refuses an empty slot or an out-of-range index. Writing the profile's
+// controller limits is a separate step (controllerProfileWrite).
 void applyControllerProfile(uint8_t index);
-// Overwrites a slot with the live settings and a name, and marks it valid.
+// Overwrites a slot's display extras from the live settings and a name, and
+// marks it valid. The controller-facing fields are left for the values page.
 void saveControllerProfile(uint8_t index, const char *name);
 // Restores a slot's defaults (so it reads as a starting point, not a blank).
 void resetControllerProfile(uint8_t index);
+// The controller's own live profile numbers, as last reported by
+// COMM_GET_MCCONF_TEMP. The values page shows these when they are available, so
+// the rider sees what the controller actually holds rather than what the display
+// sent.
+extern VescMcconfTemp vescLiveProfile;
+extern bool vescLiveProfileValid;
+
+// ERPM per km/h from the display's own drivetrain figures (wheel, pole pairs,
+// gear ratio, speed calibration). One definition so a speed limit means the same
+// speed to the telemetry task and to the pages that show it.
+float drivetrainRpmPerKmh();
 
 // Cruise control settings, applied by the controller backend from the telemetry
 // task. Persisted with the rest of the app settings.

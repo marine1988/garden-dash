@@ -9,7 +9,10 @@
 #include "cruise_control.h"
 #include "fardriver_ble.h"
 #include "vesc_ble.h"
+#include "vesc_profile.h"
 #include "vesc_protocol.h"
+
+#include <string.h>
 
 namespace {
 
@@ -48,6 +51,37 @@ portMUX_TYPE cruiseMux = portMUX_INITIALIZER_UNLOCKED;
 volatile uint8_t cruiseRequestPending = 0;  // 0 none, 1 engage, 2 disengage
 volatile int16_t cruiseAdjustPending = 0;   // km/h nudge to apply once
 CruiseRuntime cruiseRuntime = {};
+
+// Profile write state, owned by the telemetry task. The UI leaves a slot number
+// and reads the last outcome; the task performs the whole read/write/verify
+// sequence so no other caller touches the wire in the middle of it.
+portMUX_TYPE profileMux = portMUX_INITIALIZER_UNLOCKED;
+volatile uint8_t profileWriteRequestIndex = 0xFF;  // 0xFF means none queued
+VescProfileWriteReport profileWriteReport = {VESC_PROFILE_WRITE_IDLE, 0xFF};
+
+// Steps of an in-flight write. Reading first is what keeps the duty and power
+// limits the controller already has: COMM_SET_MCCONF_TEMP writes every field it
+// carries, so the ones a profile does not own are echoed back unchanged.
+enum : uint8_t {
+  kProfileStepIdle = 0,
+  kProfileStepReadFirst,
+  kProfileStepLimits,
+  kProfileStepFieldWeakening,
+  kProfileStepConfirm,
+};
+uint8_t profileStepState = kProfileStepIdle;
+uint32_t profileStepDueMs = 0;
+uint8_t profileStepIndex = 0xFF;
+VescProfileTarget profileStepTarget = {};
+
+// The controller restarts LispBM on first use and only takes one REPL command
+// every 0.5 s, so the field-weakening step waits a little over that.
+constexpr uint32_t kProfileLispGapMs = 650;
+constexpr uint32_t kProfileSettleMs = 120;
+// How often the controller's own profile numbers are refreshed for the values
+// page, so it shows what the VESC holds rather than what the display sent.
+constexpr uint32_t kProfileRefreshMs = 3000;
+uint32_t profileLastRefreshMs = 0;
 
 float wheelCircumferenceMeters() {
   return PI * wheelDiameterMm / 1000.0F;
@@ -284,6 +318,143 @@ void vescBackendStop() {
   resetVescSession();
 }
 
+// Wraps a command payload with the CAN-forward prefix when the display talks to
+// a remote VESC through a local one. The prefix goes before the command byte,
+// exactly as vescBuildCommandPayload does for the requests.
+uint8_t profileWrapCanForward(const uint8_t *payload, size_t len, uint8_t *out, size_t cap) {
+  if (vescCanId == 0) {
+    if (cap < len) return 0;
+    memcpy(out, payload, len);
+    return (uint8_t)len;
+  }
+  if (cap < len + 2u) return 0;
+  out[0] = VESC_COMM_FORWARD_CAN;
+  out[1] = vescCanId;
+  memcpy(out + 2, payload, len);
+  return (uint8_t)(len + 2u);
+}
+
+// Asks the controller for its current profile numbers and publishes them. This
+// is the "display reads from the VESC" half: the values page shows these, so it
+// reports what the controller holds, not what the display last sent.
+void vescProfileRefresh() {
+  uint8_t msg[64];
+  const int len = vescRequest(VESC_COMM_GET_MCCONF_TEMP, msg, sizeof(msg));
+  if (len <= 0) return;
+  VescMcconfTemp parsed = {};
+  if (!vescParseMcconfTemp(msg, (size_t)len, parsed)) return;
+  vescLiveProfile = parsed;
+  vescLiveProfileValid = true;
+}
+
+// Writes the speed and current limits. The duty and power limits are echoed from
+// the last read-back because this command always writes every field it carries;
+// sending zeros or extremes there would silently widen the controller's envelope.
+void vescProfileSendLimits(const VescProfileTarget &target) {
+  VescProfileValues values = {};
+  values.currentMinScale = target.currentMinScale;
+  values.currentMaxScale = target.currentMaxScale;
+  values.minErpm = target.minErpm;
+  values.maxErpm = target.maxErpm;
+  values.minDuty = vescLiveProfileValid ? vescLiveProfile.minDuty : 0.0F;
+  values.maxDuty = vescLiveProfileValid ? vescLiveProfile.maxDuty : 0.0F;
+  values.wattMin = vescLiveProfileValid ? vescLiveProfile.wattMin : 0.0F;
+  values.wattMax = vescLiveProfileValid ? vescLiveProfile.wattMax : 0.0F;
+  values.includeInCurrent = vescLiveProfileValid;
+  values.inCurrentMin = vescLiveProfile.inCurrentMin;
+  values.inCurrentMax = vescLiveProfile.inCurrentMax;
+
+  uint8_t inner[64];
+  const size_t n = vescBuildMcconfTempPayload(values, inner, sizeof(inner));
+  if (n == 0) return;
+  uint8_t payload[72];
+  const uint8_t wrapped = profileWrapCanForward(inner, n, payload, sizeof(payload));
+  if (wrapped) vescSendPacket(payload, wrapped);
+}
+
+// Sends the field-weakening setting as a LispBM expression: it has no field in
+// COMM_SET_MCCONF_TEMP, and conf-set applies it in RAM without touching flash.
+void vescProfileSendFieldWeakening(uint8_t index) {
+  if (index >= kControllerProfileCount) return;
+  char expression[kVescProfileLispMaxLen];
+  const size_t len = vescProfileLispFieldWeakening(controllerProfiles[index].fieldWeakeningAmps,
+                                                   expression, sizeof(expression));
+  if (len == 0) return;
+  uint8_t inner[64];
+  const size_t n = vescBuildLispPayload(expression, inner, sizeof(inner));
+  if (n == 0) return;
+  uint8_t payload[72];
+  const uint8_t wrapped = profileWrapCanForward(inner, n, payload, sizeof(payload));
+  if (wrapped) vescSendPacket(payload, wrapped);
+}
+
+void vescProfileSetReport(VescProfileWriteStatus status, uint8_t index) {
+  portENTER_CRITICAL(&profileMux);
+  profileWriteReport.status = status;
+  profileWriteReport.index = index;
+  portEXIT_CRITICAL(&profileMux);
+}
+
+// Runs one step of a profile write, and the periodic read-back when idle. Called
+// from the telemetry poll so the wire is only ever touched from one task.
+void vescProfileStep(uint32_t now, float rpmPerKmh) {
+  uint8_t request = 0xFF;
+  portENTER_CRITICAL(&profileMux);
+  request = profileWriteRequestIndex;
+  profileWriteRequestIndex = 0xFF;
+  portEXIT_CRITICAL(&profileMux);
+
+  if (request != 0xFF && request < kControllerProfileCount) {
+    const ControllerProfile &slot = controllerProfiles[request];
+    profileStepTarget = vescProfileTarget(slot.forwardSpeedKmh, slot.reverseSpeedKmh,
+                                          slot.currentMaxScalePercent, slot.currentMinScalePercent, rpmPerKmh);
+    profileStepIndex = request;
+    profileStepState = kProfileStepReadFirst;
+    profileStepDueMs = now;
+    vescProfileSetReport(VESC_PROFILE_WRITE_SENT, request);
+  }
+
+  if (profileStepState == kProfileStepIdle) {
+    if ((int32_t)(now - profileLastRefreshMs) >= 0) {
+      profileLastRefreshMs = now + kProfileRefreshMs;
+      vescProfileRefresh();
+    }
+    return;
+  }
+  if ((int32_t)(now - profileStepDueMs) < 0) return;
+
+  switch (profileStepState) {
+    case kProfileStepReadFirst:
+      vescProfileRefresh();
+      profileStepState = kProfileStepLimits;
+      profileStepDueMs = now + kProfileSettleMs;
+      break;
+    case kProfileStepLimits:
+      vescProfileSendLimits(profileStepTarget);
+      profileStepState = kProfileStepFieldWeakening;
+      profileStepDueMs = now + kProfileLispGapMs;
+      break;
+    case kProfileStepFieldWeakening:
+      vescProfileSendFieldWeakening(profileStepIndex);
+      profileStepState = kProfileStepConfirm;
+      profileStepDueMs = now + kProfileSettleMs;
+      break;
+    case kProfileStepConfirm: {
+      vescProfileRefresh();
+      const bool matches =
+          vescLiveProfileValid && vescProfileReadBackMatches(profileStepTarget, vescLiveProfile);
+      vescProfileSetReport(matches ? VESC_PROFILE_WRITE_CONFIRMED : VESC_PROFILE_WRITE_FAILED,
+                           profileStepIndex);
+      profileStepState = kProfileStepIdle;
+      profileStepIndex = 0xFF;
+      break;
+    }
+    default:
+      profileStepState = kProfileStepIdle;
+      break;
+  }
+}
+
 ControllerPollResult vescBackendPoll(ControllerSample &out) {
   const uint32_t now = millis();
   // A fresh Bluetooth link means data is about to flow, so ask straight away
@@ -308,6 +479,14 @@ ControllerPollResult vescBackendPoll(ControllerSample &out) {
       cruiseRuntime.targetKmh = 0;
       cruiseRuntime.targetRpm = 0;
       portEXIT_CRITICAL(&cruiseMux);
+      // A write in flight cannot finish on a dead link: report it failed and drop
+      // the step, so it does not resume mid-sequence when the link returns.
+      if (profileStepState != kProfileStepIdle) {
+        profileStepState = kProfileStepIdle;
+        profileStepIndex = 0xFF;
+        vescProfileSetReport(VESC_PROFILE_WRITE_FAILED, profileWriteReport.index);
+      }
+      vescLiveProfileValid = false;
       Serial.println("VESC telemetry disconnected");
     }
     return CONTROLLER_POLL_NO_SAMPLE;
@@ -339,6 +518,16 @@ ControllerPollResult vescBackendPoll(ControllerSample &out) {
   updateFirmwareVersion(now);
   fillVescSample(out, now);
 
+  // km/h <-> ERPM for the cruise and profile code below, from the display's own
+  // drivetrain figures so a limit means the speed the rider actually sees.
+  const float trim = speedCalibration();
+  const float driveRatio = max(1, (int)vescDriveRatioHundredths) / 100.0F;
+  const float polePairs = max<uint8_t>(1, vescMotorPolePairs);
+  const float circumference = wheelCircumferenceMeters();
+  const float rpmPerKmh = circumference > 0.0F
+                              ? polePairs * driveRatio / (circumference * 0.06F * trim)
+                              : 0.0F;
+
   // Cruise control runs on the sample just built, from the telemetry task that
   // owns the transport. The settings are the display's own globals, read here
   // exactly as the drivetrain figures above are.
@@ -368,13 +557,7 @@ ControllerPollResult vescBackendPoll(ControllerSample &out) {
     // reject anything; cruiseModeAllowed treats 0 as "not reported".
     inputs.rideMode = 0;
     inputs.linkLive = true;  // this poll just produced a sample
-    const float trim = speedCalibration();
-    const float driveRatio = max(1, (int)vescDriveRatioHundredths) / 100.0F;
-    const float polePairs = max<uint8_t>(1, vescMotorPolePairs);
-    const float circumference = wheelCircumferenceMeters();
-    inputs.rpmPerKmh = circumference > 0.0F
-                           ? polePairs * driveRatio / (circumference * 0.06F * trim)
-                           : 0.0F;
+    inputs.rpmPerKmh = rpmPerKmh;
 
     CruiseOutput control = {};
     portENTER_CRITICAL(&cruiseMux);
@@ -383,6 +566,11 @@ ControllerPollResult vescBackendPoll(ControllerSample &out) {
     portEXIT_CRITICAL(&cruiseMux);
     if (control.send) vescSendControl(control.command, control.value);
   }
+
+  // A requested profile switch, or the slow read-back that keeps the values page
+  // showing the controller's own numbers. Runs last so it cannot delay the
+  // telemetry the dashboard draws from.
+  vescProfileStep(now, rpmPerKmh);
   return CONTROLLER_POLL_UPDATED;
 }
 
@@ -402,6 +590,21 @@ void vescCruiseAdjustTarget(int deltaKmh) {
   portENTER_CRITICAL(&cruiseMux);
   cruiseAdjustPending = (int16_t)deltaKmh;
   portEXIT_CRITICAL(&cruiseMux);
+}
+
+void vescProfileRequestWrite(uint8_t index) {
+  portENTER_CRITICAL(&profileMux);
+  profileWriteRequestIndex = index;
+  profileWriteReport.status = VESC_PROFILE_WRITE_SENT;
+  profileWriteReport.index = index;
+  portEXIT_CRITICAL(&profileMux);
+}
+
+VescProfileWriteReport vescProfileWriteReportGet() {
+  portENTER_CRITICAL(&profileMux);
+  const VescProfileWriteReport report = profileWriteReport;
+  portEXIT_CRITICAL(&profileMux);
+  return report;
 }
 
 bool vescCruiseActive(uint16_t &targetKmh) {

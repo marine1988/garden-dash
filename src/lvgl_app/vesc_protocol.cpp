@@ -1,5 +1,6 @@
 #include "vesc_protocol.h"
 #include <math.h>
+#include <string.h>
 
 float vescEstimatePhasePeakVoltage(float batteryVoltage, float dutyCycle) {
   // VESC FOC: |Vdq| = Vbus * |duty| / sqrt(3), the peak of a phase-to-neutral sine,
@@ -164,5 +165,106 @@ bool vescParseFwVersion(const uint8_t *payload, size_t len, uint8_t &major, uint
   if (!payload || len < kFwVersionMinLen || payload[0] != VESC_COMM_FW_VERSION) return false;
   major = payload[1];
   minor = payload[2];
+  return true;
+}
+
+void vescAppendFloat32Auto(uint8_t *out, float value, size_t &index) {
+  // Byte-for-byte the controller's own buffer_append_float32_auto. Subnormals
+  // are folded to zero because the split-significand form cannot represent them.
+  if (!isfinite(value) || fabsf(value) < 1.5e-38F) value = 0.0F;
+
+  int exponent = 0;
+  const float sig = frexpf(value, &exponent);
+  const float sigAbs = fabsf(sig);
+  uint32_t sigInt = 0;
+  if (sigAbs >= 0.5F) {
+    sigInt = (uint32_t)((sigAbs - 0.5F) * 2.0F * 8388608.0F);
+    exponent += 126;
+  }
+  uint32_t raw = ((uint32_t)(exponent & 0xFF) << 23) | (sigInt & 0x7FFFFFu);
+  if (sig < 0.0F) raw |= 1u << 31;
+
+  out[index++] = (uint8_t)(raw >> 24);
+  out[index++] = (uint8_t)(raw >> 16);
+  out[index++] = (uint8_t)(raw >> 8);
+  out[index++] = (uint8_t)(raw);
+}
+
+float vescReadFloat32Auto(const uint8_t *buf, size_t &index) {
+  const uint32_t raw = (uint32_t)buf[index] << 24 | (uint32_t)buf[index + 1] << 16 |
+                       (uint32_t)buf[index + 2] << 8 | (uint32_t)buf[index + 3];
+  index += 4;
+
+  int exponent = (int)((raw >> 23) & 0xFF);
+  const uint32_t sigInt = raw & 0x7FFFFFu;
+  const bool negative = (raw & (1u << 31)) != 0;
+  float sig = 0.0F;
+  if (exponent != 0 || sigInt != 0) {
+    sig = (float)sigInt / (8388608.0F * 2.0F) + 0.5F;
+    exponent -= 126;
+  }
+  if (negative) sig = -sig;
+  return ldexpf(sig, exponent);
+}
+
+size_t vescBuildMcconfTempPayload(const VescProfileValues &values, uint8_t *out, size_t cap) {
+  const size_t needed = 5u + 8u * 4u + (values.includeInCurrent ? 2u * 4u : 0u);
+  if (!out || cap < needed) return 0;
+
+  size_t n = 0;
+  out[n++] = VESC_COMM_SET_MCCONF_TEMP;
+  out[n++] = 0;  // store: apply in RAM, never write the controller's flash
+  out[n++] = 0;  // forward over CAN
+  out[n++] = 0;  // ack
+  out[n++] = 0;  // divide by controllers
+  vescAppendFloat32Auto(out, values.currentMinScale, n);
+  vescAppendFloat32Auto(out, values.currentMaxScale, n);
+  vescAppendFloat32Auto(out, values.minErpm, n);
+  vescAppendFloat32Auto(out, values.maxErpm, n);
+  vescAppendFloat32Auto(out, values.minDuty, n);
+  vescAppendFloat32Auto(out, values.maxDuty, n);
+  vescAppendFloat32Auto(out, values.wattMin, n);
+  vescAppendFloat32Auto(out, values.wattMax, n);
+  if (values.includeInCurrent) {
+    vescAppendFloat32Auto(out, values.inCurrentMin, n);
+    vescAppendFloat32Auto(out, values.inCurrentMax, n);
+  }
+  return n;
+}
+
+size_t vescBuildLispPayload(const char *expression, uint8_t *out, size_t cap) {
+  if (!expression || !out) return 0;
+  const size_t len = strlen(expression);
+  if (len == 0) return 0;
+  const size_t needed = 1u + len + 1u;  // command id, text, NUL
+  if (cap < needed) return 0;
+
+  size_t n = 0;
+  out[n++] = VESC_COMM_LISP_REPL_CMD;
+  memcpy(out + n, expression, len);
+  n += len;
+  out[n++] = 0;
+  return n;
+}
+
+bool vescParseMcconfTemp(const uint8_t *payload, size_t len, VescMcconfTemp &out) {
+  // Command id plus the ten float32_auto fields the reply carries.
+  const size_t kMcconfTempMinLen = 1u + 10u * 4u;
+  if (!payload || len < kMcconfTempMinLen || payload[0] != VESC_COMM_GET_MCCONF_TEMP) return false;
+
+  size_t i = 1;
+  VescMcconfTemp v = {};
+  v.currentMinScale = vescReadFloat32Auto(payload, i);
+  v.currentMaxScale = vescReadFloat32Auto(payload, i);
+  v.minErpm = vescReadFloat32Auto(payload, i);
+  v.maxErpm = vescReadFloat32Auto(payload, i);
+  v.minDuty = vescReadFloat32Auto(payload, i);
+  v.maxDuty = vescReadFloat32Auto(payload, i);
+  v.wattMin = vescReadFloat32Auto(payload, i);
+  v.wattMax = vescReadFloat32Auto(payload, i);
+  v.inCurrentMin = vescReadFloat32Auto(payload, i);
+  v.inCurrentMax = vescReadFloat32Auto(payload, i);
+
+  out = v;
   return true;
 }

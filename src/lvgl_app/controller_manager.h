@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_state.h"
+#include "vesc_profile.h"  // VescProfileWriteReport
 
 constexpr uint8_t CONTROLLER_LINK_MAX_DEVICES = 12;
 constexpr uint8_t CONTROLLER_ADDRESS_CHARS = 20;
@@ -166,6 +167,10 @@ struct ControllerCapabilities {
   // can hold a cruise setpoint. False for the FarDriver link, which has no
   // equivalent command.
   bool supportsCruiseControl;
+  // True when the link accepts COMM_SET_MCCONF_TEMP and the LispBM field
+  // weakening command, so a profile can be written to the controller. False for
+  // the FarDriver link, which has no equivalent.
+  bool supportsProfileWrite;
 };
 
 enum ControllerBackendId : uint8_t {
@@ -260,6 +265,15 @@ void controllerCruiseDisengage();
 void controllerCruiseAdjustTarget(int deltaKmh);
 // False when cruise is idle. `targetKmh` is written only while active.
 bool controllerCruiseActive(uint16_t &targetKmh);
+
+// Controller profiles written to the link. `controllerSupportsProfileWrite()` is
+// false on a FarDriver link and on the host preview, where the write is a no-op.
+// `controllerProfileWrite()` queues the slot for the telemetry task; poll
+// `controllerProfileWriteReport()` for the outcome (it reaches CONFIRMED only
+// after the controller reports the new limits back).
+bool controllerSupportsProfileWrite();
+void controllerProfileWrite(uint8_t index);
+VescProfileWriteReport controllerProfileWriteReport();
 
 #ifdef CYD_LVGL_PREVIEW
 void previewSetControllerTelemetryFields(TelemetryFieldMask available, TelemetryFieldMask derived);

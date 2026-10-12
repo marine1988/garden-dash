@@ -298,59 +298,109 @@ int main() {
   tap(40, 22);
   if (!expect(submenuType == SUBMENU_CONTROLLER_CONFIG, "Back did not return to configuration")) return 1;
 
-  // Profiles are why this change exists: the ride-mode limits had no screen at
-  // all before. The Values page must expose them (and the cruise ceiling)
-  // through the shared editor, and SAVE must copy the live figures into the
-  // selected slot -- explicitly, only when the rider asks.
-  controllerType = CONTROLLER_VESC;
-  controllerConnection = CONTROLLER_CONNECTION_UART;
+  // Profiles store the controller limits and the display extras. The write path
+  // needs a live controller link, so the host preview exercises the state layer
+  // and the capability gate; the UI interaction is covered after the pages.
   uiPreviewSetControllerBackend(CONTROLLER_VESC, CONTROLLER_CONNECTION_UART);
   resetControllerProfile(0);
   activeControllerProfile = 0xFF;
-  uiPreviewSetSubmenu(SUBMENU_PROFILES, 1, false);
-  uiShow(SCREEN_SUBMENU);
-  cyd::preview::advanceTime(200);
-  if (!expect(tapLabel(vehicleFieldTitle(SPEED_FIELD_BASE + SPEED_FIELD_MODE_1)),
-              "profile values page hid the ride-mode limits") ||
-      !expectScreen(SCREEN_TEXT_INPUT, "ride-mode limit editor"))
+  topSpeedKmh = 120;
+  cruiseMaxSpeedKmh = 40;
+  batteryMaxAmps = 123;
+  saveControllerProfile(0, "TEST");
+  if (!expect(controllerProfiles[0].valid && controllerProfiles[0].topSpeedKmh == 120 &&
+                  controllerProfiles[0].cruiseMaxKmh == 40 && controllerProfiles[0].batteryMaxAmps == 123,
+              "saving a profile captured the display extras"))
     return 1;
-  tap(40, 22);
-  cyd::preview::advanceTime(200);
-  if (!expect(submenuType == SUBMENU_PROFILES && profilePage == 1,
-              "cancelling a value edit lost the profile values page"))
+  // The controller-facing limits belong to the slot and are not overwritten by a
+  // capture, which only reads the display globals.
+  controllerProfiles[0].forwardSpeedKmh = 33;
+  saveControllerProfile(0, "TEST");
+  if (!expect(controllerProfiles[0].forwardSpeedKmh == 33, "a capture kept the controller limits"))
     return 1;
-  if (!expect(tapLabel("CRUISE MAX"), "profile values page hid the cruise ceiling") ||
-      !expectScreen(SCREEN_TEXT_INPUT, "cruise ceiling editor"))
+  topSpeedKmh = 5;
+  cruiseMaxSpeedKmh = 6;
+  batteryMaxAmps = 7;
+  applyControllerProfile(0);
+  if (!expect(topSpeedKmh == 120 && cruiseMaxSpeedKmh == 40 && batteryMaxAmps == 123,
+              "applying a profile restored the display extras"))
     return 1;
-  tap(40, 22);
-  cyd::preview::advanceTime(200);
+  // The capability belongs to the backend definition, so it is true for a VESC
+  // link even on the host; the write itself is a no-op there, and its report
+  // must stay idle rather than claim a controller confirmed anything.
+  if (!expect(controllerSupportsProfileWrite(), "the VESC link accepts profile writes"))
+    return 1;
+  controllerProfileWrite(0);
+  if (!expect(controllerProfileWriteReport().status == VESC_PROFILE_WRITE_IDLE,
+              "the host preview write is a no-op and reports idle"))
+    return 1;
+  uiPreviewSetControllerBackend(CONTROLLER_FARDRIVER, CONTROLLER_CONNECTION_BLE);
+  if (!expect(!controllerSupportsProfileWrite(), "the FarDriver link does not write profiles"))
+    return 1;
+  uiPreviewSetControllerBackend(CONTROLLER_VESC, CONTROLLER_CONNECTION_UART);
 
-  // Capture the live setup into slot 0, edit a value, SAVE, and confirm the
-  // slot followed: explicit save, never automatic.
-  speedMode1Kmh = 33; speedMode2Kmh = 44; speedMode3Kmh = 55; topSpeedKmh = 120;
+  // The profile pages: pick a slot, edit a controller limit through the shared
+  // editor, and check that APPLY raises a confirmation dialog rather than
+  // writing to the controller the moment it is tapped.
+  resetControllerProfile(0);
+  resetControllerProfile(1);
+  activeControllerProfile = 0xFF;
   uiPreviewSetSubmenu(SUBMENU_PROFILES, 0, false);
   uiShow(SCREEN_SUBMENU);
   cyd::preview::advanceTime(200);
   tap(70, 90);  // slot 0 (left column, top row)
   cyd::preview::advanceTime(200);
-  if (!expect(controllerProfiles[0].valid && activeControllerProfile == 0,
-              "tapping an empty slot did not capture the live setup") ||
-      !expect(controllerProfiles[0].mode1Kmh == 33 && controllerProfiles[0].topSpeedKmh == 120,
-              "captured profile missed a live value"))
+  if (!expect(activeControllerProfile == 0 && controllerProfiles[0].valid,
+              "selecting an empty slot filled and selected it"))
     return 1;
-  speedMode1Kmh = 77;
+
+  uiPreviewSetSubmenu(SUBMENU_PROFILES, 1, false);
+  uiShow(SCREEN_SUBMENU);
+  cyd::preview::advanceTime(200);
+  if (!expect(tapLabel("FORWARD LIMIT"), "limits page hid the forward limit") ||
+      !expectScreen(SCREEN_TEXT_INPUT, "forward limit editor"))
+    return 1;
+  tap(40, 22);  // cancel
+  cyd::preview::advanceTime(200);
+  if (!expect(submenuType == SUBMENU_PROFILES && profilePage == 1,
+              "cancelling a profile edit lost the limits page"))
+    return 1;
+
   uiPreviewSetSubmenu(SUBMENU_PROFILES, 2, false);
   uiShow(SCREEN_SUBMENU);
   cyd::preview::advanceTime(200);
-  tap(70, 90);  // SAVE tile (first on the manage page)
-  cyd::preview::advanceTime(200);
-  if (!expect(controllerProfiles[0].mode1Kmh == 77 && controllerProfiles[0].mode2Kmh == 44,
-              "SAVE did not copy the edited value into the slot"))
+  if (!expect(tapLabel("CRUISE MAX"), "extras page hid the cruise ceiling") ||
+      !expectScreen(SCREEN_TEXT_INPUT, "cruise ceiling editor"))
     return 1;
-  speedMode1Kmh = 5; speedMode2Kmh = 6; speedMode3Kmh = 7; topSpeedKmh = 200;
-  applyControllerProfile(0);
-  if (!expect(speedMode1Kmh == 77 && speedMode2Kmh == 44 && speedMode3Kmh == 55 && topSpeedKmh == 120,
-              "applying a profile did not restore its limits"))
+  tap(40, 22);
+  cyd::preview::advanceTime(200);
+
+  // APPLY first asks for confirmation: a write to a live controller is never a
+  // single accidental tap.
+  controllerProfiles[0].topSpeedKmh = 111;
+  controllerProfiles[0].valid = true;
+  activeControllerProfile = 0;
+  topSpeedKmh = 5;
+  uiPreviewSetSubmenu(SUBMENU_PROFILES, 3, false);
+  uiShow(SCREEN_SUBMENU);
+  cyd::preview::advanceTime(200);
+  if (!expect(tapLabel("APPLY TO CONTROLLER"), "apply tile missing from the manage page"))
+    return 1;
+  if (!expect(hasLabel(lv_scr_act(), "WRITE PROFILE TO CONTROLLER"),
+              "apply did not raise the confirmation dialog") ||
+      !expect(topSpeedKmh == 5, "apply wrote before the rider confirmed"))
+    return 1;
+  tapLabel("CANCEL");
+  cyd::preview::advanceTime(200);
+  if (!expect(topSpeedKmh == 5, "cancelling still applied the profile")) return 1;
+
+  uiPreviewSetSubmenu(SUBMENU_PROFILES, 3, false);
+  uiShow(SCREEN_SUBMENU);
+  cyd::preview::advanceTime(200);
+  if (!expect(tapLabel("APPLY TO CONTROLLER"), "apply tile missing on reopen")) return 1;
+  if (!expect(tapLabel("APPLY"), "confirmation dialog had no APPLY button")) return 1;
+  cyd::preview::advanceTime(200);
+  if (!expect(topSpeedKmh == 111, "confirming APPLY did not apply the display extras"))
     return 1;
 
   uiPreviewSetSubmenu(SUBMENU_SPEED, 0, false);

@@ -92,6 +92,25 @@ uint8_t cruiseAllowedModes = (1u << 0) | (1u << 1);
 
 ControllerProfile controllerProfiles[kControllerProfileCount] = {};
 uint8_t activeControllerProfile = 0xFF;
+// The controller's own live profile numbers, as last read back over
+// COMM_GET_MCCONF_TEMP. Published by the telemetry task; read by the values page.
+VescMcconfTemp vescLiveProfile = {};
+bool vescLiveProfileValid = false;
+
+float drivetrainRpmPerKmh() {
+  // Written without the Arduino macros so the host preview, which stubs them,
+  // compiles this too.
+  const float circumference = 3.14159265F * (float)wheelDiameterMm / 1000.0F;
+  if (circumference <= 0.0F) return 0.0F;
+  int trimPercent = (int)speedCalibrationPercent;
+  if (trimPercent < 50) trimPercent = 50;
+  else if (trimPercent > 200) trimPercent = 200;
+  int ratioHundredths = (int)vescDriveRatioHundredths;
+  if (ratioHundredths < 1) ratioHundredths = 1;
+  const uint8_t poles = vescMotorPolePairs < 1 ? 1 : vescMotorPolePairs;
+  return (float)poles * ((float)ratioHundredths / 100.0F) /
+         (circumference * 0.06F * ((float)trimPercent / 100.0F));
+}
 static bool autoAppearanceLight = false;
 static DashboardMode accentRenderMode = MODE_HUD;
 
@@ -110,7 +129,7 @@ static constexpr const char *kBarGraphProfileRevisionKey = "barsProfileRev";
 // Increment when the ControllerProfile layout changes. Stored in NVS beside the
 // blob; a mismatch discards the stored profiles rather than reading them back
 // shifted.
-static constexpr uint8_t kControllerProfileRevision = 2;
+static constexpr uint8_t kControllerProfileRevision = 3;
 static constexpr const char *kControllerProfileRevisionKey = "profRev";
 static const uint8_t kDashboardDataCounts[MODE_COUNT] = {
     8, 8, 3, 11, 4, 3, 7, 4, 7, 5, 4, 4,
@@ -1383,10 +1402,13 @@ static ControllerProfile persistedControllerProfiles[kControllerProfileCount] = 
 static bool persistedControllerProfilesKnown = false;
 
 static bool sameControllerProfile(const ControllerProfile &a, const ControllerProfile &b) {
-  return strncmp(a.name, b.name, sizeof(a.name)) == 0 && a.mode1Kmh == b.mode1Kmh && a.mode2Kmh == b.mode2Kmh &&
-         a.mode3Kmh == b.mode3Kmh && a.topSpeedKmh == b.topSpeedKmh && a.cruiseMaxKmh == b.cruiseMaxKmh &&
-         a.maxBatteryAmps == b.maxBatteryAmps && a.maxMotorAmps == b.maxMotorAmps &&
-         a.contPowerDeciKw == b.contPowerDeciKw && a.peakPowerDeciKw == b.peakPowerDeciKw && a.valid == b.valid;
+  return strncmp(a.name, b.name, sizeof(a.name)) == 0 && a.forwardSpeedKmh == b.forwardSpeedKmh &&
+         a.reverseSpeedKmh == b.reverseSpeedKmh && a.currentMaxScalePercent == b.currentMaxScalePercent &&
+         a.currentMinScalePercent == b.currentMinScalePercent && a.fieldWeakeningAmps == b.fieldWeakeningAmps &&
+         a.cruiseMaxKmh == b.cruiseMaxKmh && a.topSpeedKmh == b.topSpeedKmh &&
+         a.batteryMaxAmps == b.batteryMaxAmps && a.motorMaxAmps == b.motorMaxAmps &&
+         a.continuousPowerDeciKw == b.continuousPowerDeciKw && a.peakPowerDeciKw == b.peakPowerDeciKw &&
+         a.valid == b.valid;
 }
 
 static bool sameControllerProfiles(const ControllerProfile *a, const ControllerProfile *b) {
@@ -1400,9 +1422,23 @@ static void setDefaultControllerProfile(uint8_t index) {
   ControllerProfile &p = controllerProfiles[index];
   memset(&p, 0, sizeof(p));
   // Named but empty: the slot shows a ready label and fills in when the rider
-  // captures the current setup, so a fresh display lists four prepared slots
-  // rather than blanks.
+  // captures the current setup, so a fresh display lists prepared slots rather
+  // than blanks. The controller limits start at values that will not surprise
+  // anyone if applied before the rider edits them.
   snprintf(p.name, sizeof(p.name), "PROFILE %u", (unsigned)(index + 1));
+  p.forwardSpeedKmh = 25;
+  p.reverseSpeedKmh = 5;
+  p.currentMaxScalePercent = 100;
+  p.currentMinScalePercent = 100;
+  p.fieldWeakeningAmps = 0;
+  // The display extras mirror the shipped defaults, so an untouched slot is a
+  // complete, plausible setup.
+  p.cruiseMaxKmh = 25;
+  p.topSpeedKmh = 100;
+  p.batteryMaxAmps = 100;
+  p.motorMaxAmps = 150;
+  p.continuousPowerDeciKw = 30;
+  p.peakPowerDeciKw = 60;
   p.valid = false;
 }
 
@@ -1413,18 +1449,31 @@ static void setDefaultControllerProfiles() {
 
 void saveControllerProfile(uint8_t index, const char *name) {
   if (index >= kControllerProfileCount) return;
+  const ControllerProfile &slot = controllerProfiles[index];
+  // Capture the display extras from the live setup. The controller-facing limits
+  // belong to the values page, so a capture keeps the ones the slot already has
+  // (or the defaults for a slot that had none).
+  const uint16_t forward = slot.valid ? slot.forwardSpeedKmh : (uint16_t)min(topSpeedKmh, (uint32_t)9999);
+  const uint16_t reverse = slot.valid ? slot.reverseSpeedKmh : 5;
+  const uint16_t maxScale = slot.valid ? slot.currentMaxScalePercent : 100;
+  const uint16_t minScale = slot.valid ? slot.currentMinScalePercent : 100;
+  const uint16_t fieldWeakening = slot.valid ? slot.fieldWeakeningAmps : 0;
+  char label[sizeof(slot.name)];
+  snprintf(label, sizeof(label), "%s", (name && name[0]) ? name : slot.name);
+
   ControllerProfile &p = controllerProfiles[index];
   memset(&p, 0, sizeof(p));
-  if (name && name[0]) snprintf(p.name, sizeof(p.name), "%s", name);
-  else snprintf(p.name, sizeof(p.name), "PROFILE %u", (unsigned)(index + 1));
-  p.mode1Kmh = speedMode1Kmh;
-  p.mode2Kmh = speedMode2Kmh;
-  p.mode3Kmh = speedMode3Kmh;
-  p.topSpeedKmh = topSpeedKmh;
+  snprintf(p.name, sizeof(p.name), "%s", label[0] ? label : "PROFILE");
+  p.forwardSpeedKmh = forward;
+  p.reverseSpeedKmh = reverse;
+  p.currentMaxScalePercent = maxScale;
+  p.currentMinScalePercent = minScale;
+  p.fieldWeakeningAmps = fieldWeakening;
   p.cruiseMaxKmh = cruiseMaxSpeedKmh;
-  p.maxBatteryAmps = batteryMaxAmps;
-  p.maxMotorAmps = motorMaxAmps;
-  p.contPowerDeciKw = continuousPowerDeciKw;
+  p.topSpeedKmh = (uint16_t)min(topSpeedKmh, (uint32_t)9999);
+  p.batteryMaxAmps = batteryMaxAmps;
+  p.motorMaxAmps = motorMaxAmps;
+  p.continuousPowerDeciKw = continuousPowerDeciKw;
   p.peakPowerDeciKw = peakPowerDeciKw;
   p.valid = true;
   saveAppSettings();
@@ -1433,19 +1482,20 @@ void saveControllerProfile(uint8_t index, const char *name) {
 void applyControllerProfile(uint8_t index) {
   if (index >= kControllerProfileCount || !controllerProfiles[index].valid) return;
   const ControllerProfile &p = controllerProfiles[index];
+  // Only the display extras are applied here. The controller limits go out over
+  // the link (controllerProfileWrite), which needs the telemetry task.
   topSpeedKmh = p.topSpeedKmh;
-  // The mode limits are clamped to the top speed, so set it first and keep the
-  // profile's own order even if a hand-edited slot had them the other way round.
-  speedMode1Kmh = min(p.mode1Kmh, topSpeedKmh);
-  speedMode2Kmh = min(p.mode2Kmh, topSpeedKmh);
-  speedMode3Kmh = min(p.mode3Kmh, topSpeedKmh);
   cruiseMaxSpeedKmh = p.cruiseMaxKmh;
-  batteryMaxAmps = p.maxBatteryAmps;
-  motorMaxAmps = p.maxMotorAmps;
-  continuousPowerDeciKw = p.contPowerDeciKw;
+  batteryMaxAmps = p.batteryMaxAmps;
+  motorMaxAmps = p.motorMaxAmps;
+  continuousPowerDeciKw = p.continuousPowerDeciKw;
   peakPowerDeciKw = p.peakPowerDeciKw;
-  // Keep the cruise window ordered after the profile moves the ceiling.
+  // Keep the cruise window ordered after the profile moves the ceiling, and the
+  // gauge full scale above the mode limits it frames.
   if (cruiseMinSpeedKmh >= cruiseMaxSpeedKmh) cruiseMinSpeedKmh = cruiseMaxSpeedKmh > 1 ? cruiseMaxSpeedKmh - 1 : 0;
+  if (speedMode1Kmh > topSpeedKmh) speedMode1Kmh = topSpeedKmh;
+  if (speedMode2Kmh > topSpeedKmh) speedMode2Kmh = topSpeedKmh;
+  if (speedMode3Kmh > topSpeedKmh) speedMode3Kmh = topSpeedKmh;
   activeControllerProfile = index;
   saveAppSettings();
 }

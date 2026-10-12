@@ -868,15 +868,48 @@ int main(int argc, char **argv) {
       if (stopAfterSelected()) return 0;
     }
     if (selected("34_profiles_slots")) {
+      // One filled slot and the rest empty, so the page shows both states.
+      for (uint8_t i = 0; i < kControllerProfileCount; ++i) resetControllerProfile(i);
+      saveControllerProfile(0, "ROAD");
+      activeControllerProfile = 0;
+      saveAppSettings();
       showSubmenu(output, SUBMENU_PROFILES, 0, false, "34_profiles_slots");
       if (stopAfterSelected()) return 0;
     }
-    if (selected("34_profiles_values")) {
-      showSubmenu(output, SUBMENU_PROFILES, 1, false, "34_profiles_values");
+    if (selected("34_profiles_limits")) {
+      // The controller limits page, with a read-back so the CTRL line is drawn:
+      // the numbers the controller reports rather than the ones the slot holds.
+      resetControllerProfile(0);
+      controllerProfiles[0].forwardSpeedKmh = 25;
+      controllerProfiles[0].reverseSpeedKmh = 5;
+      controllerProfiles[0].currentMaxScalePercent = 60;
+      controllerProfiles[0].currentMinScalePercent = 80;
+      controllerProfiles[0].fieldWeakeningAmps = 10;
+      controllerProfiles[0].valid = true;
+      activeControllerProfile = 0;
+      vescLiveProfile = {};
+      vescLiveProfile.currentMaxScale = 0.6F;
+      vescLiveProfile.currentMinScale = 0.8F;
+      vescLiveProfile.maxErpm = 1326.0F;
+      vescLiveProfile.minErpm = -265.0F;
+      vescLiveProfileValid = true;
+      showSubmenu(output, SUBMENU_PROFILES, 1, false, "34_profiles_limits");
+      if (stopAfterSelected()) return 0;
+    }
+    if (selected("34_profiles_extras")) {
+      resetControllerProfile(0);
+      saveControllerProfile(0, "ROAD");
+      activeControllerProfile = 0;
+      saveAppSettings();
+      showSubmenu(output, SUBMENU_PROFILES, 2, false, "34_profiles_extras");
       if (stopAfterSelected()) return 0;
     }
     if (selected("34_profiles_manage")) {
-      showSubmenu(output, SUBMENU_PROFILES, 2, false, "34_profiles_manage");
+      resetControllerProfile(0);
+      saveControllerProfile(0, "ROAD");
+      activeControllerProfile = 0;
+      saveAppSettings();
+      showSubmenu(output, SUBMENU_PROFILES, 3, false, "34_profiles_manage");
       if (stopAfterSelected()) return 0;
     }
 

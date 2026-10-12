@@ -222,6 +222,112 @@ void testControlFraming() {
          "control payload without CAN refuses to overflow");
 }
 
+void testFloat32Auto() {
+  // Golden bytes from an independent port of the controller's own
+  // buffer_append_float32_auto (util/buffer.c), not from this implementation.
+  struct Case {
+    float value;
+    uint8_t bytes[4];
+  };
+  const Case cases[] = {
+      {0.0F, {0x00, 0x00, 0x00, 0x00}},
+      {0.5F, {0x3F, 0x00, 0x00, 0x00}},
+      {1.0F, {0x3F, 0x80, 0x00, 0x00}},
+      {-1.0F, {0xBF, 0x80, 0x00, 0x00}},
+      {0.62F, {0x3F, 0x1E, 0xB8, 0x52}},
+      {25.0F, {0x41, 0xC8, 0x00, 0x00}},
+      {100.0F, {0x42, 0xC8, 0x00, 0x00}},
+      {3000.0F, {0x45, 0x3B, 0x80, 0x00}},
+      {-3000.0F, {0xC5, 0x3B, 0x80, 0x00}},
+      {0.1F, {0x3D, 0xCC, 0xCC, 0xCD}},
+  };
+
+  uint8_t buf[4] = {};
+  for (const Case &c : cases) {
+    size_t index = 0;
+    vescAppendFloat32Auto(buf, c.value, index);
+    expect(index == 4, "float32_auto writes four bytes");
+    expect(std::memcmp(buf, c.bytes, 4) == 0, "float32_auto golden bytes");
+    size_t readIndex = 0;
+    expectNear(vescReadFloat32Auto(buf, readIndex), c.value, "float32_auto round-trip");
+    expect(readIndex == 4, "float32_auto read advances four bytes");
+  }
+
+  // A NaN or a subnormal would poison a limit field, so the codec folds it to 0.
+  size_t index = 0;
+  vescAppendFloat32Auto(buf, NAN, index);
+  size_t readIndex = 0;
+  expect(vescReadFloat32Auto(buf, readIndex) == 0.0F, "float32_auto folds NaN to zero");
+}
+
+void testMcconfTempPayload() {
+  VescProfileValues v = {};
+  v.currentMinScale = 0.5F;   // brake scaling
+  v.currentMaxScale = 1.0F;   // drive scaling
+  v.minErpm = -3000.0F;
+  v.maxErpm = 3000.0F;
+  v.minDuty = -1.0F;
+  v.maxDuty = 1.0F;
+  v.wattMin = -10000.0F;
+  v.wattMax = 10000.0F;
+
+  uint8_t payload[64] = {};
+  const size_t n = vescBuildMcconfTempPayload(v, payload, sizeof(payload));
+  expect(n == 37, "MCCONF_TEMP payload is id + four flags + eight floats");
+  expect(payload[0] == VESC_COMM_SET_MCCONF_TEMP, "MCCONF_TEMP command id");
+  expect(payload[1] == 0 && payload[2] == 0 && payload[3] == 0 && payload[4] == 0,
+         "MCCONF_TEMP flags: store off, no CAN forward, no ack, no divide");
+  // store=false is the whole point: the controller's flash must never be written.
+  // Field offsets: currentMinScale at 5, currentMaxScale at 9.
+  const uint8_t minScale[] = {0x3F, 0x00, 0x00, 0x00};
+  const uint8_t maxScale[] = {0x3F, 0x80, 0x00, 0x00};
+  expect(std::memcmp(payload + 5, minScale, 4) == 0, "MCCONF_TEMP brake scale bytes");
+  expect(std::memcmp(payload + 9, maxScale, 4) == 0, "MCCONF_TEMP drive scale bytes");
+
+  v.includeInCurrent = true;
+  v.inCurrentMin = -30.0F;
+  v.inCurrentMax = 30.0F;
+  const size_t withIn = vescBuildMcconfTempPayload(v, payload, sizeof(payload));
+  expect(withIn == n + 8, "MCCONF_TEMP appends battery-current limits when asked");
+
+  expect(vescBuildMcconfTempPayload(v, payload, n + 7) == 0, "MCCONF_TEMP refuses to overflow");
+}
+
+void testLispPayload() {
+  const char *expr = "(conf-set 'foc-fw-current-max 10)";
+  uint8_t payload[64] = {};
+  const size_t n = vescBuildLispPayload(expr, payload, sizeof(payload));
+  expect(n == std::strlen(expr) + 2, "lisp payload is id + text + NUL");
+  expect(payload[0] == VESC_COMM_LISP_REPL_CMD, "lisp payload command id");
+  expect(std::memcmp(payload + 1, expr, std::strlen(expr)) == 0, "lisp payload text");
+  expect(payload[n - 1] == 0, "lisp payload NUL terminates the expression");
+
+  expect(vescBuildLispPayload("", payload, sizeof(payload)) == 0, "lisp refuses an empty expression");
+  expect(vescBuildLispPayload(expr, payload, n - 1) == 0, "lisp refuses to overflow");
+}
+
+void testParseMcconfTemp() {
+  uint8_t payload[64] = {};
+  payload[0] = VESC_COMM_GET_MCCONF_TEMP;
+  size_t i = 1;
+  const float values[] = {0.5F, 1.0F, -3000.0F, 3000.0F, -1.0F, 1.0F, -10000.0F, 10000.0F, -30.0F, 30.0F};
+  for (float value : values) vescAppendFloat32Auto(payload, value, i);
+
+  VescMcconfTemp out = {};
+  expect(vescParseMcconfTemp(payload, i, out), "MCCONF_TEMP reply accepted");
+  expectNear(out.currentMinScale, 0.5F, "mcconf brake scale");
+  expectNear(out.currentMaxScale, 1.0F, "mcconf drive scale");
+  expectNear(out.minErpm, -3000.0F, "mcconf reverse limit");
+  expectNear(out.maxErpm, 3000.0F, "mcconf forward limit");
+  expectNear(out.inCurrentMax, 30.0F, "mcconf battery current max");
+
+  VescMcconfTemp ignored = {};
+  expect(!vescParseMcconfTemp(payload, i - 1, ignored), "MCCONF_TEMP rejects a short reply");
+  expect(!vescParseMcconfTemp(nullptr, i, ignored), "MCCONF_TEMP rejects null");
+  payload[0] = VESC_COMM_GET_VALUES;
+  expect(!vescParseMcconfTemp(payload, i, ignored), "MCCONF_TEMP rejects a wrong command id");
+}
+
 }  // namespace
 
 int main() {
@@ -231,6 +337,10 @@ int main() {
   testFwVersion();
   testFraming();
   testControlFraming();
+  testFloat32Auto();
+  testMcconfTempPayload();
+  testLispPayload();
+  testParseMcconfTemp();
   if (failures == 0) printf("vesc_protocol: all checks passed\n");
   return failures == 0 ? 0 : 1;
 }

@@ -20,6 +20,14 @@ void vescCruiseAdjustTarget(int deltaKmh);
 // False when cruise is idle. `targetKmh` is written only while active.
 bool vescCruiseActive(uint16_t &targetKmh);
 
+// Profile writes, driven from the telemetry task for the same reason. The UI
+// leaves the slot number; the task reads the controller's current limits,
+// writes the profile's speed and current limits (store=0, so nothing reaches the
+// controller's flash), sets field weakening over LispBM, then reads the limits
+// back and reports whether they match. The UI polls vescProfileWriteReportGet().
+void vescProfileRequestWrite(uint8_t index);
+VescProfileWriteReport vescProfileWriteReportGet();
+
 void farDriverBackendBegin();
 void farDriverBackendStop();
 ControllerPollResult farDriverBackendPoll(ControllerSample &out);

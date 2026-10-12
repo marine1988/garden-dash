@@ -17,6 +17,11 @@ struct FirmwareChangelogEntry {
 static const FirmwareChangelogEntry kFirmwareChangelog[] = {
     {
         "2026-10-13",
+        "Profiles write to the VESC",
+        "Three profiles now set the controller's limits live, and read them back.",
+    },
+    {
+        "2026-10-13",
         "Editable profiles",
         "Profiles gain a values page; dead Power & Current and VESC Ride Modes cards go.",
     },
@@ -29,11 +34,6 @@ static const FirmwareChangelogEntry kFirmwareChangelog[] = {
         "2026-10-06",
         "Battery chemistry",
         "Battery Configuration is one page, with Li-ion, LiPo, LiFePO4 and editable cell volts.",
-    },
-    {
-        "2026-10-06",
-        "Theme previews at real time",
-        "Theme previews run at 1x; fast demo rides still train gauge ranges between updates.",
     },
 };
 

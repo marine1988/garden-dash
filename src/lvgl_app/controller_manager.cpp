@@ -176,17 +176,17 @@ ControllerPollResult noPoll(ControllerSample &) { return CONTROLLER_POLL_NO_SAMP
 
 const ControllerBackend kBackends[] = {
     {CONTROLLER_ID_VESC_UART, "VESC", CONTROLLER_TRANSPORT_UART,
-     {false, true, true, false, true, false, false, true},
+     {false, true, true, false, true, false, false, true, true},
      VESC_UART_BEGIN, VESC_BACKEND_STOP, noReset, quiesceImmediately,
      noScan, noConnect, noDisconnect, nullptr, uartLinkStatus, noDiagnostics,
      VESC_BACKEND_POLL, VESC_CONNECTED_POLL_MS, 4096},
     {CONTROLLER_ID_VESC_BLE, "VESC", CONTROLLER_TRANSPORT_BLE,
-     {true, false, true, false, true, false, false, true},
+     {true, false, true, false, true, false, false, true, true},
      VESC_BLE_BEGIN, VESC_BACKEND_STOP, resetVescBle, quiesceVescBle,
      startVescScan, connectVesc, disconnectVesc, reconnectVesc, vescBleLinkStatus, noDiagnostics,
      VESC_BACKEND_POLL, VESC_CONNECTED_POLL_MS, 4096},
     {CONTROLLER_ID_FARDRIVER_BLE, "FarDriver", CONTROLLER_TRANSPORT_BLE,
-     {true, false, false, true, false, false, true, false},
+     {true, false, false, true, false, false, true, false, false},
      FARDRIVER_BEGIN, FARDRIVER_STOP, resetFarDriverBle, quiesceFarDriverBle,
      startFarDriverScan, connectFarDriver, disconnectFarDriver, reconnectFarDriver, farDriverLinkStatus,
      farDriverDiagnostics,
@@ -728,4 +728,24 @@ void controllerCruiseEngage() {}
 void controllerCruiseDisengage() {}
 void controllerCruiseAdjustTarget(int) {}
 bool controllerCruiseActive(uint16_t &) { return false; }
+#endif
+
+// Controller profiles. The capability comes from the active backend's caps, so
+// the gate is compiled in both builds; the write reaches the VESC backend on the
+// device and is a no-op on the host preview, which has no transport.
+bool controllerSupportsProfileWrite() { return activeControllerBackend()->caps.supportsProfileWrite; }
+
+#ifndef CYD_LVGL_PREVIEW
+void controllerProfileWrite(uint8_t index) {
+  if (controllerSupportsProfileWrite()) vescProfileRequestWrite(index);
+}
+VescProfileWriteReport controllerProfileWriteReport() {
+  if (!controllerSupportsProfileWrite()) return {VESC_PROFILE_WRITE_IDLE, 0xFF};
+  return vescProfileWriteReportGet();
+}
+#else
+void controllerProfileWrite(uint8_t) {}
+VescProfileWriteReport controllerProfileWriteReport() {
+  return {VESC_PROFILE_WRITE_IDLE, 0xFF};
+}
 #endif
