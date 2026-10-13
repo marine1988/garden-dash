@@ -45,3 +45,4 @@ wrapper_verify_build/
 # Remembers where the offline signing key lives on this machine. The path only,
 # never the password -- but the location of a release key is not for publishing.
 /tools/firmware_update/release.local.json
+.DS_Store
