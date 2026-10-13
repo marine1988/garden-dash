@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// Synthetic replies for KAJO's current VESC decoder, not a claim of
+// Synthetic replies for GARDEN's current VESC decoder, not a claim of
 // compatibility with every VESC firmware. Deliberately independent of
 // src/lvgl_app/vesc_protocol.cpp: a sender that shared the receiver's encoder
 // would agree with it even if both were wrong.
@@ -151,7 +151,7 @@ inline size_t makeFwVersionFrame(uint8_t *out, size_t capacity, uint8_t major = 
   payload[i++] = kCommandFwVersion;
   payload[i++] = major;
   payload[i++] = minor;
-  for (const char *name = "KAJO-TEST"; *name; name++) payload[i++] = uint8_t(*name);
+  for (const char *name = "GARDEN-TEST"; *name; name++) payload[i++] = uint8_t(*name);
   payload[i++] = 0;
   return frame(payload, i, out, capacity);
 }

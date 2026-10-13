@@ -65,8 +65,8 @@ follow the popup convention above.
 
 ## Compatibility policy
 
-KAJO-Dash 0.01 is the first signed release (see `RELEASES.md`, a `v*` tag built
-by `kajo.bat` option 5, **R**), so settings, ride logs, and update protocols
+Garden-Dash 0.01 is the first signed release (see `RELEASES.md`, a `v*` tag built
+by `garden.bat` option 5, **R**), so settings, ride logs, and update protocols
 may now be installed on real devices. Do not add compatibility shims for the
 prototype versions that came before it; they were never released.
 

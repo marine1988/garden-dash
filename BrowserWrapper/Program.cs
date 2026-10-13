@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Net.Http;
 using System.Windows.Forms;
 
-namespace KajoLayoutEditor;
+namespace GardenLayoutEditor;
 
 static class Program
 {
@@ -18,7 +18,7 @@ static class Program
         ApplicationConfiguration.Initialize();
 
         // The editor only has the native LVGL mode now; a leftover --lvgl argument is ignored.
-        const string appTitle = "KAJO-Dash Layout Editor";
+        const string appTitle = "Garden-Dash Layout Editor";
         string root = FindProjectRoot();
         string url = $"http://127.0.0.1:{Port}{EditorPath}?v={EditorVersion}";
         Process? server = IsReachable(url) ? null : StartServer(root);

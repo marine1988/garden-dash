@@ -17,6 +17,11 @@ struct FirmwareChangelogEntry {
 static const FirmwareChangelogEntry kFirmwareChangelog[] = {
     {
         "2026-10-13",
+        "Garden rename",
+        "The project, firmware and display are now Garden-Dash and GARDEN DASH.",
+    },
+    {
+        "2026-10-13",
         "Eco, Drive and Sport",
         "Three named profile slots, with a coloured badge on the dashboard.",
     },
@@ -29,11 +34,6 @@ static const FirmwareChangelogEntry kFirmwareChangelog[] = {
         "2026-10-13",
         "Editable profiles",
         "Profiles gain a values page; dead Power & Current and VESC Ride Modes cards go.",
-    },
-    {
-        "2026-10-09",
-        "Cruise control & profiles",
-        "Hold to engage cruise over a VESC link; four profiles store vehicle setups.",
     },
 };
 

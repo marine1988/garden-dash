@@ -193,7 +193,7 @@ class PlanTests(unittest.TestCase):
             self.assertEqual((plan.next_name, plan.next_code), ("0.02", 2))
             self.assertEqual(plan.problems, [])
             self.assertEqual(plan.warnings, [])
-            self.assertEqual(plan.build_dir, sandbox.pio_build / "kajo")
+            self.assertEqual(plan.build_dir, sandbox.pio_build / "garden")
 
     def test_release_needs_a_clean_tree_and_a_new_version(self):
         with tempfile.TemporaryDirectory() as directory, Sandbox(Path(directory)) as sandbox:
@@ -207,17 +207,17 @@ class PlanTests(unittest.TestCase):
     def test_an_existing_output_stops_the_release_before_anything_changes(self):
         with tempfile.TemporaryDirectory() as directory, Sandbox(Path(directory)) as sandbox:
             sandbox.dist.mkdir()
-            (sandbox.dist / "KAJO-Dash-Firmware-v1-Windows.zip").write_bytes(b"old")
+            (sandbox.dist / "Garden-Dash-Firmware-v1-Windows.zip").write_bytes(b"old")
             plan = self.check(sandbox, make_release.RELEASE)
             self.assertEqual(len(plan.problems), 1)
-            self.assertIn("KAJO-Dash-Firmware-v1-Windows.zip", plan.problems[0])
+            self.assertIn("Garden-Dash-Firmware-v1-Windows.zip", plan.problems[0])
 
     def test_test_package_is_fine_with_uncommitted_changes(self):
         with tempfile.TemporaryDirectory() as directory, Sandbox(Path(directory)) as sandbox:
             plan = self.check(sandbox, make_release.TEST, git_status=" M src/main_lvgl.cpp")
             self.assertEqual((plan.problems, plan.warnings), ([], []))
             self.assertEqual(plan.label, "0.01-test")
-            self.assertEqual(plan.build_dir, sandbox.pio_build / "kajo_test_package")
+            self.assertEqual(plan.build_dir, sandbox.pio_build / "garden_test_package")
 
     def test_test_package_of_a_released_version_is_a_warning(self):
         with tempfile.TemporaryDirectory() as directory, Sandbox(Path(directory)) as sandbox:
@@ -246,12 +246,12 @@ class ExecutionTests(unittest.TestCase):
 
             self.assertTrue(all(path.parent == previous for path in artifacts))
             self.assertEqual(sorted(path.name for path in previous.iterdir()), sorted([
-                "firmware-v1.json", "firmware-v1.bin", "firmware-v1.zlib", "firmware-v1.kajofw",
+                "firmware-v1.json", "firmware-v1.bin", "firmware-v1.zlib", "firmware-v1.gardenfw",
                 "firmware-v1-usb.json", "firmware-v1-bootloader.bin", "firmware-v1-partitions.bin",
-                "firmware-v1-boot_app0.bin", "KAJO-Dash-Firmware-v1-test-Windows.zip"]))
-            self.assertIn(["pio", "run", "-e", "kajo_test_package"], sandbox.commands)
+                "firmware-v1-boot_app0.bin", "Garden-Dash-Firmware-v1-test-Windows.zip"]))
+            self.assertIn(["pio", "run", "-e", "garden_test_package"], sandbox.commands)
             self.assertEqual(sandbox.config.read_text(encoding="utf-8"), CONFIG.format(code=1, name="0.01"))
-            self.assertFalse((sandbox.releases / "kajo-update.json").exists())
+            self.assertFalse((sandbox.releases / "garden-update.json").exists())
             self.assertFalse(sandbox.dist.exists())
             self.assertFalse(sandbox.staging.exists())
 
@@ -262,13 +262,13 @@ class ExecutionTests(unittest.TestCase):
                                     sandbox.key.private_key)
 
             self.assertEqual({path.name for path in artifacts},
-                             {path.name for path in make_release.release_outputs(1)} | {"kajo-update.json"})
+                             {path.name for path in make_release.release_outputs(1)} | {"garden-update.json"})
             self.assertTrue(all(path.is_file() for path in artifacts))
-            self.assertIn(["pio", "run", "-e", "kajo"], sandbox.commands)
+            self.assertIn(["pio", "run", "-e", "garden"], sandbox.commands)
             self.assertFalse(sandbox.staging.exists())
-            index = json.loads((sandbox.releases / "kajo-update.json").read_text(encoding="utf-8"))
+            index = json.loads((sandbox.releases / "garden-update.json").read_text(encoding="utf-8"))
             self.assertEqual((index["version_code"], index["version_name"], index["tag"]), (1, "0.01", "v0.01"))
-            with zipfile.ZipFile(sandbox.dist / "KAJO-Dash-Firmware-v1-Windows.zip") as archive:
+            with zipfile.ZipFile(sandbox.dist / "Garden-Dash-Firmware-v1-Windows.zip") as archive:
                 self.assertIn("firmware-v1-usb.json", archive.namelist())
 
     def test_recording_a_release_tags_it_and_moves_the_version_on(self):
@@ -283,13 +283,13 @@ class ExecutionTests(unittest.TestCase):
             self.assertEqual((release.name, release.code, release.sha256), ("0.01", 1, manifest["sha256"]))
             self.assertEqual(sandbox.config.read_text(encoding="utf-8"), CONFIG.format(code=2, name="0.02"))
             git = [command[1:4] for command in sandbox.commands if command[0] == "git"]
-            self.assertEqual(git, [["commit", "-m", "Release KAJO-Dash 0.01"],
+            self.assertEqual(git, [["commit", "-m", "Release Garden-Dash 0.01"],
                                    ["tag", "-a", "v0.01"],
-                                   ["commit", "-m", "Start KAJO-Dash 0.02"]])
+                                   ["commit", "-m", "Start Garden-Dash 0.02"]])
 
     def test_failed_step_puts_back_what_it_edited_and_writes_nothing(self):
         with tempfile.TemporaryDirectory() as directory, Sandbox(Path(directory)) as sandbox:
-            index = sandbox.releases / "kajo-update.json"
+            index = sandbox.releases / "garden-update.json"
             index.write_text('{"version_code": 0}\n', encoding="utf-8")
             header = sandbox.root / "firmware_changelog.h"
             header.write_text("old header\n", encoding="utf-8")
@@ -307,7 +307,7 @@ class ExecutionTests(unittest.TestCase):
                             sandbox.key.private_key)
 
             self.assertEqual(header.read_text(encoding="utf-8"), "old header\n")
-            self.assertEqual(sorted(path.name for path in sandbox.releases.iterdir()), ["kajo-update.json"])
+            self.assertEqual(sorted(path.name for path in sandbox.releases.iterdir()), ["garden-update.json"])
             self.assertEqual(index.read_text(encoding="utf-8"), '{"version_code": 0}\n')
             self.assertFalse(sandbox.dist.exists())
             self.assertFalse(sandbox.staging.exists())

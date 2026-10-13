@@ -32,7 +32,7 @@ static constexpr uint8_t kFirmwareSigningPublicKey[65] = {{
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Create the offline KAJO-Dash firmware release key")
+    parser = argparse.ArgumentParser(description="Create the offline Garden-Dash firmware release key")
     parser.add_argument("--private-key", type=Path, required=True,
                         help="new PEM path outside the repository")
     parser.add_argument("--public-header", type=Path, default=DEFAULT_HEADER,

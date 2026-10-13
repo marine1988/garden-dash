@@ -1,4 +1,4 @@
-"""Generate KAJO app icons from shared vector geometry. Requires Pillow."""
+"""Generate GARDEN app icons from shared vector geometry. Requires Pillow."""
 from pathlib import Path
 import math
 from PIL import Image, ImageDraw
@@ -31,7 +31,7 @@ def vector(adaptive=False,mono=False):
     return '<?xml version="1.0" encoding="utf-8"?>\n<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">\n'+group+'\n</vector>\n'
 def main():
     OUT.mkdir(parents=True,exist_ok=True)
-    write(OUT/"kajo_app_icon.svg",'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108"><rect width="108" height="108" rx="22" fill="#000000"/>'+''.join(f'<path fill="{c}" d="{d}"/>' for c,d in PATHS)+'</svg>\n')
+    write(OUT/"garden_app_icon.svg",'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108"><rect width="108" height="108" rx="22" fill="#000000"/>'+''.join(f'<path fill="{c}" d="{d}"/>' for c,d in PATHS)+'</svg>\n')
     scale=12
     image=Image.new("RGBA",(108*scale,108*scale))
     draw=ImageDraw.Draw(image)
@@ -41,9 +41,9 @@ def main():
         polygon(arc_points(outer)+list(reversed(arc_points(inner))),ORANGE)
     polygon(BOLT,"#ffffff")
     icon=image.resize((512,512),Image.Resampling.LANCZOS)
-    icon.save(OUT/"kajo_app_icon.png")
-    icon.save(OUT/"kajo_app_icon.ico",sizes=[(s,s) for s in [16,24,32,48,64,128,256]])
-    (ROOT/"BrowserWrapper/AppIcon.ico").write_bytes((OUT/"kajo_app_icon.ico").read_bytes())
+    icon.save(OUT/"garden_app_icon.png")
+    icon.save(OUT/"garden_app_icon.ico",sizes=[(s,s) for s in [16,24,32,48,64,128,256]])
+    (ROOT/"BrowserWrapper/AppIcon.ico").write_bytes((OUT/"garden_app_icon.ico").read_bytes())
     # The companion app is a separate private checkout; public clones lack it.
     res=ROOT/"android-companion/app/src/main/res"
     if not res.is_dir():

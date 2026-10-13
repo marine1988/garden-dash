@@ -1,9 +1,9 @@
-"""Generate the KAJO brand kit as clean, resolution-independent SVG.
+"""Generate the GARDEN brand kit as clean, resolution-independent SVG.
 
 The app icon generator owns the launcher crop. This script redraws the splash
-design language for print, web and documents: the ring and bolt mark, the KAJO
+design language for print, web and documents: the ring and bolt mark, the GARDEN
 wordmark and lockups use exact geometry. The mountain-road scenes reuse the
-hand-traced central landscape from kajo_splash.svg (snapped to the 320x240 TFT
+hand-traced central landscape from garden_splash.svg (snapped to the 320x240 TFT
 pixel grid) and extend it with generated outer ranges on wide canvases.
 
 Edit the geometry constants below, then run `python tools/logo/generate_brand.py`.
@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent / "brand"
-SPLASH_SOURCE = Path(__file__).resolve().parent / "kajo_splash.svg"
+SPLASH_SOURCE = Path(__file__).resolve().parent / "garden_splash.svg"
 
 # ── Palette ──────────────────────────────────────────────────────────────────
 ORANGE = "#ff7900"       # primary accent: power ring, A accent, road
@@ -77,14 +77,18 @@ BAR = 11.0
 TRACK = 5.0
 
 
-def letter_k(x0):
-    # Arms are parallel strokes 18 wide measured along the cap/base lines.
-    slope = 19.0 / 24.0                      # dy/dx of the arm edges
-    join = STEM + 0.0
-    y_top = (37.0 - join) * slope           # where the upper arm meets the stem
-    pts = [(0, 0), (STEM, 0), (STEM, y_top), (37, 0), (55, 0), (31, CAP / 2),
-           (55, CAP), (37, CAP), (STEM, CAP - y_top), (STEM, CAP), (0, CAP)]
-    return poly([(x0 + x, y) for x, y in pts]), 55.0
+def letter_g(x0):
+    # A C-shaped ring with its opening in the upper right, and a crossbar
+    # reaching left into the counter. The outline carries the opening; the
+    # counter is a hole and the bar fills the counter's right, so no two
+    # subpaths overlap and evenodd stays predictable.
+    w = 60.0
+    gap_lo, gap_hi = BAR, BAR * 2.0
+    outer = [(0, 0), (w, 0), (w, gap_lo), (w - STEM, gap_lo), (w - STEM, gap_hi),
+             (w, gap_hi), (w, CAP), (0, CAP)]
+    counter = rrect(x0 + STEM, BAR, w - 2 * STEM, CAP - 2 * BAR, 4.0)
+    bar = rect(x0 + w / 2, gap_hi - BAR, w / 2 - STEM, BAR)
+    return f"{poly([(x0 + x, y) for x, y in outer])} {counter} {bar}", w
 
 
 def letter_a(x0):
@@ -102,14 +106,15 @@ def letter_a(x0):
     return poly(sh(outer)), poly(sh(accent)), w
 
 
-def letter_j(x0):
-    w = 36.0
-    s = w - STEM
-    ro, ri = 14.0, 6.0
-    d = (f"M{f(x0 + s)},0 H{f(x0 + w)} V{f(CAP - ro)} "
-         f"A{f(ro)},{f(ro)} 0 0 1 {f(x0 + w - ro)},{f(CAP)} H{f(x0)} V{f(CAP - BAR)} "
-         f"H{f(x0 + s - ri)} A{f(ri)},{f(ri)} 0 0 0 {f(x0 + s)},{f(CAP - BAR - ri)} Z")
-    return d, w
+def letter_r(x0):
+    # Bowl, stem and leg in one outline, so no two edges cross and the leg never
+    # reads as an arrowhead: the bowl's right side stays vertical and the leg
+    # leaves it below the counter.
+    w = 58.0
+    pts = [(0, 0), (31, 0), (44, 13), (44, 22), (58, 38), (44, 38), (34, 26),
+           (16, 26), (16, 38), (0, 38)]
+    counter = rrect(x0 + STEM, BAR, 12.0, CAP - 2 * BAR, 4.0)
+    return f"{poly([(x0 + x, y) for x, y in pts])} {counter}", w
 
 
 def rrect(x, y, w, h, r):
@@ -119,22 +124,51 @@ def rrect(x, y, w, h, r):
             f"A{f(r)},{f(r)} 0 0 1 {f(x + r)},{f(y)} Z")
 
 
-def letter_o(x0):
-    w = 57.0
-    # Counter drawn in reverse winding via evenodd so the O stays one path.
-    return rrect(x0, 0, w, CAP, 13.0) + " " + rrect(x0 + STEM, BAR, w - 2 * STEM, CAP - 2 * BAR, 4.0), w
+def rect(x, y, w, h):
+    return f"M{f(x)},{f(y)} H{f(x + w)} V{f(y + h)} H{f(x)} Z"
+
+
+def letter_d(x0):
+    # A stem and a bowl: the O's ring with its left side straightened.
+    w, r = 57.0, 13.0
+    outer = (f"M{f(x0)},{f(0)} H{f(x0 + w - r)} A{f(r)},{f(r)} 0 0 1 {f(x0 + w)},{f(r)} "
+             f"V{f(CAP - r)} A{f(r)},{f(r)} 0 0 1 {f(x0 + w - r)},{f(CAP)} H{f(x0)} Z")
+    counter = rrect(x0 + STEM, BAR, w - 2 * STEM, CAP - 2 * BAR, 4.0)
+    return f"{outer} {counter}", w
+
+
+def letter_e(x0):
+    # Three arms off a stem, the middle one shorter, as the K's arms are cut.
+    w = 46.0
+    lo, hi = (CAP - BAR) / 2.0, (CAP + BAR) / 2.0
+    pts = [(0, 0), (w, 0), (w, BAR), (STEM, BAR), (STEM, lo), (38, lo), (38, hi),
+           (STEM, hi), (STEM, CAP - BAR), (w, CAP - BAR), (w, CAP), (0, CAP)]
+    return poly([(x0 + x, y) for x, y in pts]), w
+
+
+def letter_n(x0):
+    # Two stems joined by a diagonal band of the same weight as the arms.
+    w, drop = 54.0, 15.0
+    pts = [(0, 0), (STEM, 0), (STEM, drop), (w - STEM, 0), (w, 0), (w, CAP),
+           (w - STEM, CAP), (w - STEM, CAP - drop), (STEM, CAP), (0, CAP)]
+    return poly([(x0 + x, y) for x, y in pts]), w
 
 
 def wordmark(ink=WHITE, accent=ORANGE, x0=0.0, y0=0.0, scale=1.0):
-    k, wk = letter_k(0)
-    a, acc, wa = letter_a(wk + TRACK)
-    xj = wk + TRACK + wa + TRACK + 1.0
-    j, wj = letter_j(xj)
-    xo = xj + wj + TRACK + 2.0
-    o, wo = letter_o(xo)
-    width = xo + wo
+    g, wg = letter_g(0)
+    xa = wg + TRACK
+    a, acc, wa = letter_a(xa)
+    xr = xa + wa + TRACK
+    r, wr = letter_r(xr)
+    xd = xr + wr + TRACK
+    d, wd = letter_d(xd)
+    xe = xd + wd + TRACK
+    e, we = letter_e(xe)
+    xn = xe + we + TRACK
+    n, wn = letter_n(xn)
+    width = xn + wn
     body = (f'<g transform="translate({f(x0)} {f(y0)}) scale({f(scale)})">'
-            f'<path fill="{ink}" fill-rule="evenodd" d="{k} {a} {j} {o}"/>'
+            f'<path fill="{ink}" fill-rule="evenodd" d="{g} {a} {r} {d} {e} {n}"/>'
             f'<path fill="{accent}" d="{acc}"/></g>')
     return body, width
 
@@ -456,10 +490,10 @@ def main():
     mw, mh = x1 - x0 + 2 * pad, y1 - y0 + 2 * pad
     at = f'<g transform="translate({f(-x0 + pad)} {f(-y0 + pad)})">'
     marks = {
-        "kajo-mark.svg": (mark(), None, "KAJO mark - for dark backgrounds"),
-        "kajo-mark-on-light.svg": (mark(bolt=INK), None, "KAJO mark - for light backgrounds"),
-        "kajo-mark-mono-white.svg": (mark(WHITE, WHITE), None, "KAJO mark - single colour white"),
-        "kajo-mark-mono-black.svg": (mark(INK, INK), None, "KAJO mark - single colour black"),
+        "garden-mark.svg": (mark(), None, "GARDEN mark - for dark backgrounds"),
+        "garden-mark-on-light.svg": (mark(bolt=INK), None, "GARDEN mark - for light backgrounds"),
+        "garden-mark-mono-white.svg": (mark(WHITE, WHITE), None, "GARDEN mark - single colour white"),
+        "garden-mark-mono-black.svg": (mark(INK, INK), None, "GARDEN mark - single colour black"),
     }
     for name, (body, bg, title) in marks.items():
         write(name, svg(mw, mh, at + body + "</g>", title, bg))
@@ -470,14 +504,14 @@ def main():
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     badge = (f'<rect width="{f(size)}" height="{f(size)}" rx="24" fill="{BLACK}"/>'
              f'<g transform="translate({f(size / 2 - cx * s)} {f(size / 2 - cy * s)}) scale({f(s)})">{mark()}</g>')
-    write("kajo-icon.svg", svg(size, size, badge, "KAJO app icon"))
+    write("garden-icon.svg", svg(size, size, badge, "GARDEN app icon"))
 
     ww, wh = WORD_W + 2 * pad, CAP + 2 * pad
     for name, ink, acc, title in [
-        ("kajo-wordmark.svg", WHITE, ORANGE, "KAJO wordmark - for dark backgrounds"),
-        ("kajo-wordmark-on-light.svg", INK, ORANGE, "KAJO wordmark - for light backgrounds"),
-        ("kajo-wordmark-mono-white.svg", WHITE, WHITE, "KAJO wordmark - single colour white"),
-        ("kajo-wordmark-mono-black.svg", INK, INK, "KAJO wordmark - single colour black"),
+        ("garden-wordmark.svg", WHITE, ORANGE, "GARDEN wordmark - for dark backgrounds"),
+        ("garden-wordmark-on-light.svg", INK, ORANGE, "GARDEN wordmark - for light backgrounds"),
+        ("garden-wordmark-mono-white.svg", WHITE, WHITE, "GARDEN wordmark - single colour white"),
+        ("garden-wordmark-mono-black.svg", INK, INK, "GARDEN wordmark - single colour black"),
     ]:
         write(name, svg(ww, wh, wordmark(ink, acc, pad, pad)[0], title))
 
@@ -493,7 +527,7 @@ def main():
                                      ("-on-light", INK, INK, "for light backgrounds")]:
         body = (f'<g transform="translate({f(pad - x0 * ms)} {f(pad - y0 * ms)}) scale({f(ms)})">{mark(bolt=bolt)}</g>'
                 + wordmark(ink, ORANGE, pad + (x1 - x0) * ms + gap, ring_cy - CAP / 2)[0])
-        write(f"kajo-lockup-horizontal{suffix}.svg", svg(hw, hh, body, f"KAJO horizontal lockup - {title}"))
+        write(f"garden-lockup-horizontal{suffix}.svg", svg(hw, hh, body, f"GARDEN horizontal lockup - {title}"))
 
     # Stacked lockup: mark over wordmark, as on the boot splash.
     ms2 = WORD_W * 0.42 / (x1 - x0)
@@ -504,24 +538,24 @@ def main():
                                      ("-on-light", INK, INK, "for light backgrounds")]:
         body = (f'<g transform="translate({f(sw / 2 - (x0 + x1) / 2 * ms2)} {f(pad - y0 * ms2)}) scale({f(ms2)})">{mark(bolt=bolt)}</g>'
                 + wordmark(ink, ORANGE, pad, pad + mark_block + 14)[0])
-        write(f"kajo-lockup-stacked{suffix}.svg", svg(sw, sh, body, f"KAJO stacked lockup - {title}"))
+        write(f"garden-lockup-stacked{suffix}.svg", svg(sw, sh, body, f"GARDEN stacked lockup - {title}"))
 
-    write("kajo-hero-4x3.svg", svg(320, 240, scene(320), "KAJO hero - boot splash scene, 4:3"))
-    write("kajo-hero-16x9.svg", svg(426.667, 240, scene(426.667), "KAJO hero - boot splash scene, 16:9"))
+    write("garden-hero-4x3.svg", svg(320, 240, scene(320), "GARDEN hero - boot splash scene, 4:3"))
+    write("garden-hero-16x9.svg", svg(426.667, 240, scene(426.667), "GARDEN hero - boot splash scene, 16:9"))
     # GitHub: a 3:1 README header and the 2:1 repository social preview.
-    write("kajo-banner-github.svg",
+    write("garden-banner-github.svg",
           svg(720, 240, github_banner_road_fade(),
-              "KAJO banner - GitHub README header, road-fade style, 3:1"))
-    write("kajo-social-preview.svg", svg(480, 240, scene(480), "KAJO social preview - 2:1"))
-    write("kajo-banner-youtube.svg", svg(YT_W, YT_H, youtube_banner(),
-                                         "KAJO YouTube channel banner, 2560x1440", pixel_scale=1))
-    write("kajo-banner-youtube-hard-edge.svg",
+              "GARDEN banner - GitHub README header, road-fade style, 3:1"))
+    write("garden-social-preview.svg", svg(480, 240, scene(480), "GARDEN social preview - 2:1"))
+    write("garden-banner-youtube.svg", svg(YT_W, YT_H, youtube_banner(),
+                                         "GARDEN YouTube channel banner, 2560x1440", pixel_scale=1))
+    write("garden-banner-youtube-hard-edge.svg",
           svg(YT_W, YT_H, youtube_banner(fade_edges=False),
-              "KAJO YouTube channel banner - clean-edged landscape, 2560x1440",
+              "GARDEN YouTube channel banner - clean-edged landscape, 2560x1440",
               pixel_scale=1))
-    write("kajo-banner-youtube-road-fade.svg",
+    write("garden-banner-youtube-road-fade.svg",
           svg(YT_W, YT_H, youtube_banner_road_fade(),
-              "KAJO YouTube channel banner - road ends fade, 2560x1440",
+              "GARDEN YouTube channel banner - road ends fade, 2560x1440",
               pixel_scale=1))
     print(f"Wrote {len(list(OUT.glob('*.svg')))} SVG files to {OUT}")
 

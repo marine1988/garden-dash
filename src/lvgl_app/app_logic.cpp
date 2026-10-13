@@ -22,7 +22,7 @@ AccentTheme dashboardGradientTheme = ACCENT_DEFAULT;
 Language language = LANG_EN;
 UnitMode unitMode = UNITS_METRIC;
 SubmenuType submenuType = SUBMENU_GENERIC;
-char oemName[16] = "KAJO DASH";
+char oemName[16] = "GARDEN DASH";
 char vehicleName[24] = "Vehicle";
 char motorName[24] = "Motor";
 char controllerName[24] = "VESC";
@@ -1708,7 +1708,7 @@ static void setDefaultAppSettings() {
   unitMode = UNITS_METRIC;
   firstBootConfigured = false;
   controllerEverConnected = false;
-  strncpy(oemName, "KAJO DASH", sizeof(oemName));
+  strncpy(oemName, "GARDEN DASH", sizeof(oemName));
   strncpy(vehicleName, "Vehicle", sizeof(vehicleName));
   strncpy(motorName, "Motor", sizeof(motorName));
   strncpy(controllerName, "VESC", sizeof(controllerName));

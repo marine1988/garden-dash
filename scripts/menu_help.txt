@@ -1,4 +1,4 @@
-# Help pages for the kajo.bat menu, opened from each option's [?] column.
+# Help pages for the garden.bat menu, opened from each option's [?] column.
 #
 # "[n] Title" starts the page for menu option n. A blank line separates
 # paragraphs, and a line starting with "- " is a bullet. The menu wraps the
@@ -6,7 +6,7 @@
 # starting with "#" are comments. Keep it ASCII.
 
 [1] Simulator
-Builds and runs the interactive KAJO-Dash simulator: the real firmware screens,
+Builds and runs the interactive Garden-Dash simulator: the real firmware screens,
 drawn by the same LVGL code, in a desktop window that you use with the mouse
 instead of the touch panel. No display hardware is needed.
 
@@ -25,7 +25,7 @@ contact_sheet.png with all of them on one page.
   metrics the layout editor uses.
 - The first run builds a headless renderer with CMake. Needs Visual Studio's
   C++ build tools, Python with Pillow, and LVGL from one PlatformIO build of the
-  kajo firmware.
+  garden firmware.
 - Use it after a UI change to check clipping, alignment and wrapping at the
   display's real size.
 
@@ -40,7 +40,7 @@ dashboard's elements against the LVGL previews, and edit the 16x16 icons.
   the display after the next flash.
 
 [4] Flash over USB
-Builds the kajo firmware with PlatformIO and writes it to a display connected
+Builds the garden firmware with PlatformIO and writes it to a display connected
 by USB. The quickest way to try a change on real hardware.
 
 - Uses the first USB serial port it finds (CH340, CP210x, FTDI and the like),
@@ -61,7 +61,7 @@ Signs and packages the version in include\config.h, in one of two ways.
   Nothing is committed or tagged and the version stays as it is, so make as
   many as you like.
 - R, release: the version as it will be published. The Windows ZIP goes to
-  dist\; the .kajofw phone bundle, kajo-update.json and the signed firmware
+  dist\; the .gardenfw phone bundle, garden-update.json and the signed firmware
   go to releases\. It is added to RELEASES.md, committed and tagged, and then
   include\config.h moves on to the next version. Needs a clean tree, and asks
   once before it starts. Nothing is pushed.
@@ -88,7 +88,7 @@ package or release made with option 5, on a display. It asks how.
   stopped. Needs Bluetooth on this PC.
 
 Either way the display restarts into the new firmware when it is done. The
-same installs run from the command line as kajo.bat --usb and kajo.bat --ble.
+same installs run from the command line as garden.bat --usb and garden.bat --ble.
 
 [7] Fake VESC
 Builds and flashes a spare CYD as a fake VESC controller, so the dashboard's
@@ -113,7 +113,7 @@ dashboard's FarDriver Bluetooth link can be tested without a vehicle.
   install it when it is missing. docs\test-senders.md has the details.
 
 [9] Install on phone
-Builds the KAJO Companion Android app and installs it with adb on a phone
+Builds the GARDEN Companion Android app and installs it with adb on a phone
 connected by USB. Shown only when the private android-companion checkout is
 present.
 

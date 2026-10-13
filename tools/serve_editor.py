@@ -292,7 +292,7 @@ def main() -> None:
     port = int(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_PORT
     Handler.port = port
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"KAJO layout editor: http://localhost:{port}/tools/layout_editor.html?lvgl=1")
+    print(f"GARDEN layout editor: http://localhost:{port}/tools/layout_editor.html?lvgl=1")
     print(f"Save endpoint writes -> {LAYOUT}")
     print(f"Icon editor writes -> {ICON_DIR}")
     print("Close this window (or press Ctrl+C) to stop.")

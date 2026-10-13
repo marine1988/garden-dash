@@ -18,7 +18,7 @@ if not exist "%BUILDER%" (
   goto finish
 )
 
-rem The same environment kajo.bat's uploader fallback creates, so either one
+rem The same environment garden.bat's uploader fallback creates, so either one
 rem can set it up on a fresh clone.
 if exist "%VENV_PY%" goto check_dependencies
 echo Creating the project Python environment in .venv...

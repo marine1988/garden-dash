@@ -22,11 +22,11 @@ if not defined UPLOAD_PORT (
 )
 
 if defined UPLOAD_PORT (
-  echo Building and uploading KAJO-Dash to %UPLOAD_PORT%...
-  "%PIO%" run -e kajo -t upload --upload-port %UPLOAD_PORT%
+  echo Building and uploading Garden-Dash to %UPLOAD_PORT%...
+  "%PIO%" run -e garden -t upload --upload-port %UPLOAD_PORT%
 ) else (
-  echo Building and uploading KAJO-Dash using PlatformIO's auto-detected port...
-  "%PIO%" run -e kajo -t upload
+  echo Building and uploading Garden-Dash using PlatformIO's auto-detected port...
+  "%PIO%" run -e garden -t upload
 )
 
 if errorlevel 1 (
@@ -40,11 +40,11 @@ if errorlevel 1 (
 )
 
 echo.
-echo KAJO-Dash upload complete.
+echo Garden-Dash upload complete.
 set "RESULT=0"
 
 :finish
-rem Keep the result on screen: kajo.bat redraws its menu straight afterwards.
+rem Keep the result on screen: garden.bat redraws its menu straight afterwards.
 echo.
 pause
 exit /b %RESULT%

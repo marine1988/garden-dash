@@ -1,6 +1,6 @@
 # Changelog
 
-Notable changes to the KAJO-Dash display firmware.
+Notable changes to the Garden-Dash display firmware.
 
 The four most recent entries are also shown on the display itself, under
 Settings → Developer options → Changelog. `tools/generate_changelog_header.py` turns this file into
@@ -19,6 +19,10 @@ Keep titles under 30 characters and summaries under 90 -- one or two lines on
 the 320x240 panel -- or the generator will truncate them and say so. Entries are English only: they are not
 translated the way the rest of the interface is, because a changelog in six
 languages is not worth hand-maintaining.
+
+## 2026-10-13 — Garden rename
+
+The project, firmware and display are now Garden-Dash and GARDEN DASH.
 
 ## 2026-10-13 — Eco, Drive and Sport
 

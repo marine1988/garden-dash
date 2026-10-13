@@ -15,12 +15,12 @@ if ($null -eq $SimulatorArgs) {
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $sourceDir = Join-Path $projectRoot 'tools\lvgl_native_preview'
 $buildDir = Join-Path $sourceDir 'build_simulator'
-$lvglDir = Join-Path $projectRoot '.pio\libdeps\kajo\lvgl'
+$lvglDir = Join-Path $projectRoot '.pio\libdeps\garden\lvgl'
 $stateFile = Join-Path $projectRoot 'build\native-simulator\preferences.bin'
 $executable = Join-Path $buildDir 'Release\cyd_simulator.exe'
 
 if (-not (Test-Path -LiteralPath (Join-Path $lvglDir 'lvgl.h'))) {
-    throw "PlatformIO's LVGL dependency is missing. Run 'pio run -e kajo' once, then retry."
+    throw "PlatformIO's LVGL dependency is missing. Run 'pio run -e garden' once, then retry."
 }
 
 # MSBuild cannot replace the simulator executable while another instance from
@@ -36,7 +36,7 @@ $runningInstances = Get-Process -Name 'cyd_simulator' -ErrorAction SilentlyConti
 }
 
 foreach ($instance in $runningInstances) {
-    Write-Host "Closing existing KAJO-Dash simulator process $($instance.Id)..."
+    Write-Host "Closing existing Garden-Dash simulator process $($instance.Id)..."
     try {
         if ($instance.MainWindowHandle -ne 0) {
             $null = $instance.CloseMainWindow()

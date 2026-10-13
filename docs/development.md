@@ -16,9 +16,9 @@ is and how to install it, start with the [README](../README.md).
 The firmware dependencies are downloaded automatically at their exact versions
 from `platformio.ini`.
 
-## The `kajo.bat` menu
+## The `garden.bat` menu
 
-On Windows, every workflow below has an entry in `kajo.bat` at the project root:
+On Windows, every workflow below has an entry in `garden.bat` at the project root:
 double-click it, move with the arrow keys or W/S and press Enter, or press an
 entry's number. Right or D moves to an entry's `[?]`, and Enter there opens a
 page explaining what it does and needs; those pages are in
@@ -33,10 +33,10 @@ and can still be run directly; this page names them that way.
 | 3 | Layout editor | `scripts\run_layout_editor_lvgl.bat` |
 | 4 | Flash over USB | `scripts\upload_firmware_usb.bat` |
 | 5 | Package firmware: test package or release | `scripts\make_release.bat [--test \| --release]` |
-| 6 | Install package, over a USB cable or Bluetooth | `kajo.bat --usb [release.json] [--port COMx] [--erase-all]`, `kajo.bat --ble [release.json] [uploader options]` |
+| 6 | Install package, over a USB cable or Bluetooth | `garden.bat --usb [release.json] [--port COMx] [--erase-all]`, `garden.bat --ble [release.json] [uploader options]` |
 | 7 | Fake VESC | `scripts\upload_vesc_test.bat` |
 | 8 | Fake FarDriver | `scripts\upload_fardriver_test.bat` |
-| 9 | Install the companion app (private checkout only) | `android-companion\kajo-app.bat` |
+| 9 | Install the companion app (private checkout only) | `android-companion\garden-app.bat` |
 
 On other platforms, use the `pio` commands directly.
 
@@ -46,14 +46,14 @@ On other platforms, use the `pio` commands directly.
 pio run
 ```
 
-`kajo` is the default environment, so a bare `pio run` builds the dashboard
+`garden` is the default environment, so a bare `pio run` builds the dashboard
 firmware. `fardriver_test` and `vesc_test` build the two fake controller
 senders instead; see [test-senders.md](test-senders.md).
 
 To build and flash over USB:
 
 ```bash
-pio run -e kajo -t upload
+pio run -e garden -t upload
 ```
 
 or on Windows `scripts\upload_firmware_usb.bat [COMx]`, which also picks the
@@ -77,7 +77,7 @@ captures LVGL's 320x240 RGB565 framebuffer — it does not approximate the UI wi
 desktop drawing calls. It regenerates `include/cyd_layout_generated.h`,
 `tools/lvgl_font_metrics.json` and `preview_output/lvgl/`.
 
-The first run needs an installed `.pio/libdeps/kajo/lvgl` (run `pio run` once).
+The first run needs an installed `.pio/libdeps/garden/lvgl` (run `pio run` once).
 Later runs are incremental.
 
 To check translated captions for overflow, render in another language.
@@ -143,7 +143,7 @@ layout header must not be edited by hand — change `tools/layout.json` through
 the editor, then regenerate.
 
 The workspace is the native LVGL render of each screen from `preview_output/lvgl/`
-(run **Generate LVGL previews**, or option 2 of `kajo.bat`, after a UI change), with your
+(run **Generate LVGL previews**, or option 2 of `garden.bat`, after a UI change), with your
 pending edits drawn over it. It lists all twelve dashboard themes. Ten are driven by the layout
 file; **11 Gauge** and **12 Efficiency** are drawn in `dashboards.cpp`, so they are shown view
 only, with no items to move. Below the workspace is the visual reference for the shared menu
@@ -164,17 +164,17 @@ only in the 12-24 px UI fonts.
 
 ## Boot splash
 
-The black KAJO splash is authored in `tools/logo/kajo_splash.svg`. Its logo,
+The black GARDEN splash is authored in `tools/logo/garden_splash.svg`. Its logo,
 mountains, trees and road use solid vector polygons, without glow or textures.
 `tools/logo/generate_splash.py` triangulates the SVG into
-`include/kajo_splash_generated.h`, which the boot renderer draws directly with
+`include/garden_splash_generated.h`, which the boot renderer draws directly with
 TFT_eSPI before LVGL starts. PlatformIO regenerates it automatically on build.
 The bottom caption stays real text and reads `CYD_FIRMWARE_VERSION_NAME`.
 
 To regenerate the geometry and a 320x240 preview with the existing TFT font:
 
 ```powershell
-python tools/logo/generate_splash.py --preview preview_output/splash/kajo_splash.png
+python tools/logo/generate_splash.py --preview preview_output/splash/garden_splash.png
 ```
 
 The preview needs Pillow and the installed TFT_eSPI dependency; generating the
@@ -233,8 +233,8 @@ signing key and use the Bluetooth uploader for your own builds. See
 
 ### Installing a signed release from a checkout
 
-Choose **6. Install package** in `kajo.bat` and pick **Over Bluetooth**, or run
-`kajo.bat --ble`. On the display, first open **Settings > Information >
+Choose **6. Install package** in `garden.bat` and pick **Over Bluetooth**, or run
+`garden.bat --ble`. On the display, first open **Settings > Information >
 Bluetooth Link**. The
 launcher selects a protocol 3 manifest matching the version in
 `include/config.h`, checking the root, then `releases/`, then the test package
@@ -243,7 +243,7 @@ uploader EXE when available, otherwise prepares its Python environment and
 starts the upload. After the uploader finishes, press a key to return to the
 menu.
 
-**Over a USB cable**, or `kajo.bat --usb`, writes the same signed package with esptool,
+**Over a USB cable**, or `garden.bat --usb`, writes the same signed package with esptool,
 without PlatformIO, as the release ZIP's **1. Install over USB cable** does. It
 only considers packages with a `-usb.json` layout beside them, which the
 release builder writes. The display's settings are kept unless `--erase-all` is
@@ -255,26 +255,26 @@ passed.
 not the last one. After a release it moves on to the next number, and everything
 built in the meantime carries it. To choose a different next version, edit its two
 defines by hand. [RELEASES.md](../RELEASES.md) lists what has been released;
-the `kajo.bat` header shows both.
+the `garden.bat` header shows both.
 
-Menu entry 5 in `kajo.bat`, or `scripts\make_release.bat` directly, packages
+Menu entry 5 in `garden.bat`, or `scripts\make_release.bat` directly, packages
 that version in one of two ways:
 
-- **T, test package** (`--test`): the firmware built in the `kajo_test_package`
+- **T, test package** (`--test`): the firmware built in the `garden_test_package`
   environment, so the display shows `0.01-test` on the boot splash and in
   Settings, signed and packaged into `releases\test\` for your own boards. It
   replaces the previous test package, commits nothing, tags nothing and leaves
   the version alone, so make as many as you like. Install one with option 6,
-  `kajo.bat --usb`, or the launcher inside its ZIP. It carries the same version
+  `garden.bat --usb`, or the launcher inside its ZIP. It carries the same version
   code as the release it leads up to, so the release later installs over it
   without a downgrade prompt.
 - **R, release** (`--release`): the firmware as it will be published, signed
   and packaged into `releases\` and `dist\`: the Windows updater ZIP, the
-  `.kajofw` bundle for the companion app, and `kajo-update.json`, the
+  `.gardenfw` bundle for the companion app, and `garden-update.json`, the
   fixed-name index the app reads from the latest GitHub release to find new
-  firmware. It adds a row to `RELEASES.md`, commits it as "Release KAJO-Dash
+  firmware. It adds a row to `RELEASES.md`, commits it as "Release Garden-Dash
   0.01" and tags that commit `v0.01`; then it moves `include/config.h` on to
-  `0.02` in a commit "Start KAJO-Dash 0.02", so test packages from then on
+  `0.02` in a commit "Start Garden-Dash 0.02", so test packages from then on
   carry the version they lead up to. A release needs a clean tree, so the tag
   matches what was built, and a version above the last one in `RELEASES.md`.
   Nothing is pushed: the builder prints what to push and what to attach to the
@@ -316,7 +316,7 @@ another signing key.
 | `include/config.h` | Pin and default configuration |
 | `include/lv_conf.h` | LVGL configuration |
 | `tools/` | Preview renderer, simulator, layout editor, asset and font pipelines |
-| `scripts/` | Windows launchers behind `kajo.bat` |
+| `scripts/` | Windows launchers behind `garden.bat` |
 | `docs/` | Contracts, feature and procedure docs; see [docs/README.md](README.md) |
 
 Why things are the way they are — invariants that are easy to break again, and

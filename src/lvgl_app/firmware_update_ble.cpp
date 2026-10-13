@@ -556,8 +556,8 @@ DataCallbacks dataCallbacks;
 ServerCallbacks serverCallbacks;
 
 bool startServer() {
-  if (!NimBLEDevice::isInitialized()) NimBLEDevice::init("KAJO-Dash Firmware Update");
-  NimBLEDevice::setDeviceName("KAJO-Dash Firmware Update");
+  if (!NimBLEDevice::isInitialized()) NimBLEDevice::init("Garden-Dash Firmware Update");
+  NimBLEDevice::setDeviceName("Garden-Dash Firmware Update");
   NimBLEDevice::setPower(3);
   NimBLEDevice::setMTU(kFirmwareUpdateMtu);
 
@@ -586,7 +586,7 @@ bool startServer() {
   // Scan response first: the name then goes there and the 128-bit service
   // UUID fits in the advertisement itself, where filtered scans see it.
   advertising->enableScanResponse(true);
-  advertising->setName("KAJO-Dash Firmware Update");
+  advertising->setName("Garden-Dash Firmware Update");
   advertising->addServiceUUID(FIRMWARE_UPDATE_SERVICE_UUID);
   if (!NimBLEDevice::startAdvertising()) return false;
   serverStarted = true;
@@ -695,7 +695,7 @@ void firmwareUpdateBleService() {
                   FIRMWARE_UPDATE_BLE_ERR_SERVER);
     return;
   }
-  publishStatus(FIRMWARE_UPDATE_BLE_ADVERTISING, "Advertising as KAJO-Dash Firmware Update");
+  publishStatus(FIRMWARE_UPDATE_BLE_ADVERTISING, "Advertising as Garden-Dash Firmware Update");
   notifyStatus();
 }
 

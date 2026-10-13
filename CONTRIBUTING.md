@@ -11,7 +11,7 @@ to know — contribute as you would to any GPL project.
 
 The exception is project-owned, hand-written firmware source. Some of that
 source is also compiled into the closed-source companion app, and other parts
-may be used in authorized KAJO-Dash commercial or white-label products. Changes
+may be used in authorized Garden-Dash commercial or white-label products. Changes
 to it need the additional, source-preserving licence grant in
 [`CLA.md`](CLA.md). The pull request template records agreement for that pull
 request, or that the agreement does not apply. Nothing to email or sign.
@@ -43,7 +43,7 @@ Issues, discussion and reverse-engineering findings need no agreement at all.
   configuration:
 
   ```powershell
-  pio run -e kajo -e fardriver_test -e vesc_test
+  pio run -e garden -e fardriver_test -e vesc_test
   ```
 
 - For anything touching the display, controller link or update path, run the

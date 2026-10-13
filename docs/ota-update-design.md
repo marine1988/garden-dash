@@ -147,7 +147,7 @@ restart after five seconds. Clients may still request `REBOOT` during that
 window to restart immediately, but the normal user flow requires no final
 install action.
 
-KAJO Companion implements the same signed OTA protocol for phone uploads.
+GARDEN Companion implements the same signed OTA protocol for phone uploads.
 
 ## Required physical tests before relying on the release key
 

@@ -1,14 +1,14 @@
-"""Add the USB install layout to a signed KAJO-Dash release.
+"""Add the USB install layout to a signed Garden-Dash release.
 
 Writes the bootloader, partition table and OTA-data reset of the build that
 produced the signed image beside it, and describes all four images in
 firmware-vN-usb.json (the format is in usb_flash.py). With them, the Windows
 updater ZIP can install a blank display over a USB cable without PlatformIO.
 
-Run it straight after signing, before the next build replaces .pio/build/kajo:
+Run it straight after signing, before the next build replaces .pio/build/garden:
 it refuses unless the build directory still holds the signed image, because a
 bootloader or partition table from a different build would not belong to it.
-The release builder (option 5 in kajo.bat) does this for you.
+The release builder (option 5 in garden.bat) does this for you.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from protocol import TARGET_NAME, load_release_manifest
 from usb_flash import APP_OFFSET, CHIP, USB_LAYOUT_FORMAT, load_usb_layout, usb_layout_path
 
 ROOT = Path(__file__).resolve().parents[2]
-BUILD_DIR = ROOT / ".pio" / "build" / "kajo"
+BUILD_DIR = ROOT / ".pio" / "build" / "garden"
 BOOT_APP0 = (Path.home() / ".platformio" / "packages" / "framework-arduinoespressif32" /
              "tools" / "partitions" / "boot_app0.bin")
 
@@ -36,7 +36,7 @@ FLASH_SIZE = "4MB"
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Write the USB install layout beside a signed KAJO-Dash release")
+        description="Write the USB install layout beside a signed Garden-Dash release")
     parser.add_argument("manifest", type=Path, help="signed JSON produced by sign_firmware.py")
     parser.add_argument("--build-dir", type=Path, default=BUILD_DIR,
                         help="PlatformIO build directory of the signed image")

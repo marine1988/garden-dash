@@ -3,7 +3,7 @@
 Not firmware footage, so it is not a scene. Two things are shown, at the 1280x960 the simulator
 chapters use for the display, and handed to make_demo_video.py like any other recording:
 
-* the `kajo.bat` menu, REDRAWN here: its entries are read from kajo.bat, its help column from
+* the `garden.bat` menu, REDRAWN here: its entries are read from garden.bat, its help column from
   scripts/menu_help.txt and its colours and layout from scripts/menu.ps1, but it is a picture of the
   menu, not a screen recording of a console. The chapter's note says so.
 * the real tools/layout_editor.html in the installed Chrome, driven by Playwright. Nothing is saved:
@@ -36,12 +36,12 @@ CAPTIONS = {
     "download": ("1. One Windows download", "Get the firmware Windows ZIP from GitHub Releases. No Python, PlatformIO or app needed."),
     "extract": ("2. Extract everything", "Right-click the ZIP and choose Extract All. Keep all the extracted files together."),
     "cable": ("3. Connect the display", "Use a USB data cable. A charge-only cable cannot install firmware."),
-    "launch": ("4. Open the installer", "Double-click Install or Update KAJO-Dash.bat in the extracted folder."),
+    "launch": ("4. Open the installer", "Double-click Install or Update Garden-Dash.bat in the extracted folder."),
     "installer": ("5. Choose USB install", "Choose 1. Install over USB cable. With one display connected, its port is selected automatically."),
-    "restart": ("Wait for the restart", "Keep the cable connected until installation finishes and KAJO-Dash starts on the display."),
+    "restart": ("Wait for the restart", "Keep the cable connected until installation finishes and Garden-Dash starts on the display."),
     "driver": ("No display found?", "Try a data cable first. If the USB driver is missing, use the driver's link printed by the installer."),
     "boot": ("Cannot connect?", "Hold BOOT, tap RST, and keep holding BOOT until writing starts. Then release BOOT."),
-    "clone": ("Optional: develop it", "You do not need these tools to install. To change the code, clone the repo and run kajo.bat."),
+    "clone": ("Optional: develop it", "You do not need these tools to install. To change the code, clone the repo and run garden.bat."),
     "simulator": ("Simulator", "The real UI on your PC."),
     "previews": ("Preview renders", "Every screen as an image."),
     "layout": ("Layout editor", "Edit tools/layout.json."),
@@ -67,8 +67,8 @@ CONSOLE_SIZE = 24
 # ------------------------------------------------------------------------------ the menu
 
 
-def menu_entries(bat: Path = ROOT / "kajo.bat") -> list[str]:
-    """The development menu's entries, as kajo.bat passes them to scripts/menu.ps1.
+def menu_entries(bat: Path = ROOT / "garden.bat") -> list[str]:
+    """The development menu's entries, as garden.bat passes them to scripts/menu.ps1.
 
     The companion-app entry is left out: it only exists with the private checkout, which someone
     starting from a clone does not have.
@@ -83,7 +83,7 @@ def menu_entries(bat: Path = ROOT / "kajo.bat") -> list[str]:
 
 
 def firmware_header() -> tuple[str, str, str]:
-    """Version name, version code and last release, read the way kajo.bat reads them."""
+    """Version name, version code and last release, read the way garden.bat reads them."""
     config = (ROOT / "include" / "config.h").read_text(encoding="utf-8", errors="replace")
     name = re.search(r"#define\s+CYD_FIRMWARE_VERSION_NAME\s+\"?([^\s\"]+)", config)
     code = re.search(r"#define\s+CYD_FIRMWARE_VERSION_CODE\s+(\d+)", config)
@@ -134,7 +134,7 @@ def console_font(names: tuple[str, ...], size: int):
             return ImageFont.truetype(name, size)
         except OSError:
             continue
-    raise FileNotFoundError(f"none of these fonts is installed for the kajo.bat menu: {', '.join(names)}")
+    raise FileNotFoundError(f"none of these fonts is installed for the garden.bat menu: {', '.join(names)}")
 
 
 MONOSPACE = ("consola.ttf", "DejaVuSansMono.ttf", "LiberationMono-Regular.ttf")
@@ -161,7 +161,7 @@ def render_menu(selected: str, pressed: bool = False):
     draw = ImageDraw.Draw(image)
     bar = 52
     draw.rectangle((0, 0, FRAME[0], bar), fill=TITLE_BAR)
-    draw.text((24, bar // 2), "KAJO-Dash", font=console_font(SANS, 22), fill=CONSOLE_TEXT, anchor="lm")
+    draw.text((24, bar // 2), "Garden-Dash", font=console_font(SANS, 22), fill=CONSOLE_TEXT, anchor="lm")
 
     def put(column: float, row: int, text: str, fill, background=None) -> None:
         x, y = 24 + column * cell, bar + 24 + row * leading
@@ -197,8 +197,8 @@ def render_menu(selected: str, pressed: bool = False):
     return image
 
 
-def installer_lines(bat: Path = ROOT / "kajo.bat") -> list[str]:
-    """What the release ZIP's launcher prints (the `:installer` block of kajo.bat), line by line."""
+def installer_lines(bat: Path = ROOT / "garden.bat") -> list[str]:
+    """What the release ZIP's launcher prints (the `:installer` block of garden.bat), line by line."""
     text = bat.read_text(encoding="utf-8", errors="replace").splitlines()
     start = next(i for i, line in enumerate(text) if line.strip().lower() == ":installer")
     lines: list[str] = []
@@ -246,12 +246,12 @@ def render_console(rows: list[str], title: str = "Terminal", cursor: bool = True
 
 
 def render_installer(choice: str = "", pressed: bool = False):
-    """The release ZIP's launcher: kajo.bat's own text, then the choice prompt."""
+    """The release ZIP's launcher: garden.bat's own text, then the choice prompt."""
     rows = installer_lines() + ["", "  Choose: " + choice]
     highlight = None
     if pressed:
         highlight = next(i for i, row in enumerate(rows) if row.strip().startswith(choice + "."))
-    return render_console(rows, "KAJO-Dash firmware", cursor=not choice, highlight=highlight)
+    return render_console(rows, "Garden-Dash firmware", cursor=not choice, highlight=highlight)
 
 
 # ------------------------------------------------------------------------------ the timeline
@@ -296,12 +296,12 @@ class Captions:
 
 
 INSTALL_STEPS = [
-    ("download", 5.0, ["FIRST INSTALL / WINDOWS", "", "One download. No development tools.", "", "github.com/evcollector/kajo-dash/releases", "KAJO-Dash-Firmware-v...-Windows.zip", "", "Illustrated guide, not a recorded download."]),
+    ("download", 5.0, ["FIRST INSTALL / WINDOWS", "", "One download. No development tools.", "", "github.com/evcollector/kajo-dash/releases", "Garden-Dash-Firmware-v...-Windows.zip", "", "Illustrated guide, not a recorded download."]),
     ("extract", 4.0, ["FIRST INSTALL / WINDOWS", "", "ZIP file > Extract All", "", "Keep the whole extracted folder together.", "Do not run the launcher from inside the ZIP."]),
     ("cable", 4.0, ["FIRST INSTALL / WINDOWS", "", "CYD display -- USB DATA cable -- Windows PC", "", "Charge-only cable: power, but no connection."]),
-    ("launch", 4.0, ["FIRST INSTALL / WINDOWS", "", "Open the extracted folder.", "", "Double-click:", "Install or Update KAJO-Dash.bat"]),
+    ("launch", 4.0, ["FIRST INSTALL / WINDOWS", "", "Open the extracted folder.", "", "Double-click:", "Install or Update Garden-Dash.bat"]),
     ("installer", 4.0, None),
-    ("restart", 4.0, ["FIRST INSTALL / WINDOWS", "", "Leave the USB cable connected.", "", "Wait for installation to finish.", "The display restarts into KAJO-Dash.", "", "Instructional guide, not a recorded flash."]),
+    ("restart", 4.0, ["FIRST INSTALL / WINDOWS", "", "Leave the USB cable connected.", "", "Wait for installation to finish.", "The display restarts into Garden-Dash.", "", "Instructional guide, not a recorded flash."]),
     ("driver", 5.0, ["TROUBLESHOOTING / ONLY IF NEEDED", "", "No USB adapter found?", "", "Check the data cable.", "Install the matching USB driver if missing.", "The installer prints CH340 / CP210x links."]),
     ("boot", 5.0, ["TROUBLESHOOTING / ONLY IF NEEDED", "", "Could not connect to the display?", "", "1. Hold BOOT.", "2. Tap RST while holding BOOT.", "3. Keep holding until writing starts.", "4. Release BOOT."]),
 ]
@@ -312,7 +312,7 @@ def console_part(writer: Writer, captions: Captions, fps: int) -> None:
     for key, seconds, guide in INSTALL_STEPS:
         captions.at(writer.frames, *CAPTIONS[key])
         image = render_installer("1", pressed=True) if guide is None else render_console(
-            guide, "KAJO-Dash installation guide", cursor=False
+            guide, "Garden-Dash installation guide", cursor=False
         )
         writer.add(image, frames_for(seconds, fps))
 
@@ -327,12 +327,12 @@ def console_part(writer: Writer, captions: Captions, fps: int) -> None:
             writer.add(render_console(rows + ["> " + shown]), 2)
 
     type_command("git clone https://github.com/evcollector/kajo-dash.git", 1.2)
-    rows += ["> git clone https://github.com/evcollector/kajo-dash.git", "Cloning into 'kajo-dash'..."]
+    rows += ["> git clone https://github.com/evcollector/kajo-dash.git", "Cloning into 'garden-dash'..."]
     writer.add(render_console(rows + ["> "]), frames_for(0.35, fps))
-    type_command("cd kajo-dash", 0.3)
-    rows += ["> cd kajo-dash"]
-    type_command("kajo.bat", 0.3)
-    writer.add(render_console(rows + ["> kajo.bat"], cursor=False), frames_for(0.25, fps))
+    type_command("cd garden-dash", 0.3)
+    rows += ["> cd garden-dash"]
+    type_command("garden.bat", 0.3)
+    writer.add(render_console(rows + ["> garden.bat"], cursor=False), frames_for(0.25, fps))
 
 
 def menu_part(writer: Writer, captions: Captions, fps: int, steps: list[tuple[str, float, tuple[str, str] | None]], press: bool) -> None:

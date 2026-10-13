@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         environment:
-          - kajo
+          - garden
           - fardriver_test
           - vesc_test
     steps:

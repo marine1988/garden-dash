@@ -22,7 +22,7 @@ tap-label "SETTINGS" settle=600
 tap-label "INFO" settle=1500
 tap-label "BLUETOOTH LINK" settle=1800
 
-caption "A short window" "Open KAJO Companion on a phone, or the Windows uploader, and connect."
+caption "A short window" "Open GARDEN Companion on a phone, or the Windows uploader, and connect."
 wait 1800
 companion connected seconds=287
 caption "Riding data carries on" "A wired controller keeps reporting. A Bluetooth one is let go while the link is open."

@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="tools/logo/brand/kajo-banner-github.svg" alt="KAJO-Dash" width="100%">
+  <img src="tools/logo/brand/garden-banner-github.svg" alt="Garden-Dash" width="100%">
 </p>
 
 <p align="center">
-  <b>KAJO-Dash</b> is a 320x240 landscape dashboard for electric vehicles, built on the
+  <b>Garden-Dash</b> is a 320x240 landscape dashboard for electric vehicles, built on the
   ESP32-2432S028R "Cheap Yellow Display".<br>
   It shows live telemetry from a VESC or FarDriver motor controller, over a wire or Bluetooth.
 </p>
@@ -199,14 +199,14 @@ If you are unsure about the wiring, do not guess.
 The easiest way is the Windows installer. It needs nothing else installed: no
 Python, no PlatformIO.
 
-1. Download `KAJO-Dash-Firmware-v…-Windows.zip` from the
+1. Download `Garden-Dash-Firmware-v…-Windows.zip` from the
    [latest release](https://github.com/evcollector/kajo-dash/releases/latest).
 2. Extract every file from the ZIP (right-click it, **Extract All**).
 3. Connect the CYD to the computer with a USB **data** cable. Charge-only
    cables do not work.
-4. Double-click `Install or Update KAJO-Dash.bat`.
+4. Double-click `Install or Update Garden-Dash.bat`.
 5. Choose **1. Install over USB cable**.
-6. Leave the cable connected until the display restarts into KAJO-Dash.
+6. Leave the cable connected until the display restarts into Garden-Dash.
 
 **Display not found?** Hold the **BOOT** button on the CYD, tap **RST**, and
 keep holding BOOT until writing starts. If no USB device shows up at all, the
@@ -219,7 +219,7 @@ Reinstalling keeps the settings already on the display.
 
 1. Download and extract the newer release, as above.
 2. On the display, open **Settings > Information > Bluetooth Link**.
-3. Double-click `Install or Update KAJO-Dash.bat` and choose
+3. Double-click `Install or Update Garden-Dash.bat` and choose
    **2. Update over Bluetooth**.
 4. Keep the display powered until it verifies the update and restarts.
 
@@ -233,11 +233,11 @@ You need [PlatformIO](https://docs.platformio.org/en/latest/core/installation/in
 
 ```bash
 git clone https://github.com/evcollector/kajo-dash.git
-cd kajo-dash
-pio run -e kajo -t upload
+cd garden-dash
+pio run -e garden -t upload
 ```
 
-On Windows you can instead double-click `kajo.bat` in the checkout and choose
+On Windows you can instead double-click `garden.bat` in the checkout and choose
 **4. Flash over USB**. If PlatformIO is missing, it offers to install it.
 
 </details>
@@ -308,7 +308,7 @@ is unambiguous, and a second hold confirms the settings reset.
 Bug reports and protocol findings are welcome, with or without a patch. Start
 with [CONTRIBUTING.md](CONTRIBUTING.md) and the [development guide](docs/development.md).
 Project-owned firmware source has one additional licence grant so it can also
-ship in KAJO Companion and authorised KAJO-Dash products. [CLA.md](CLA.md)
+ship in GARDEN Companion and authorised Garden-Dash products. [CLA.md](CLA.md)
 defines the scope, and the pull request template records agreement.
 
 ## Licence
@@ -327,9 +327,10 @@ permissions described in [CLA.md](CLA.md).
 
 ## Disclaimer
 
-KAJO-Dash is an independent hobby project. *Kajo* is a Finnish word for a glow
-or faint light. It does not refer to any company or product with the same name,
-and the project is not affiliated with or endorsed by any of them.
+Garden-Dash is an independent hobby project. It began life as *Kajo* -- a Finnish
+word for a glow or faint light -- and was renamed. It does not refer to any
+company or product with the same name, and the project is not affiliated with or
+endorsed by any of them.
 
 VESC is a trademark of Benjamin Vedder. FarDriver, ESP32, and other brand names
 belong to their owners and are used only to describe what this display

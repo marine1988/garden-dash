@@ -1,4 +1,4 @@
-# KAJO-Dash UI component system
+# Garden-Dash UI component system
 
 This is the canonical visual and interaction system for the 320x240 LVGL UI.
 Read it before adding or changing menus, dialogs, selectors, or status messages.
@@ -196,7 +196,7 @@ Before considering a UI change complete:
 3. Add or update the relevant native-preview state.
 4. Render the native preview at 320x240 and inspect touch-target distinction,
    clipping, alignment, and text wrapping.
-5. Build the `kajo` PlatformIO environment (the former `lvgl_test` environment).
+5. Build the `garden` PlatformIO environment (the former `lvgl_test` environment).
 
 When a genuinely new reusable component is needed, add one canonical helper,
 add any reusable values to `ui_style.h`, and update both this document and the

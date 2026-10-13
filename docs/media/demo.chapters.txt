@@ -6,4 +6,4 @@
 1:36 Display settings
 1:51 Developer mode
 2:04 Updates over Bluetooth
-2:18 Get KAJO-Dash
+2:18 Get Garden-Dash

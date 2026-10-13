@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# KAJO-Dash installer and flasher for macOS.
+# Garden-Dash installer and flasher for macOS.
 #
-# The project's own launchers (kajo.bat, scripts/*.bat) are Windows-only. This
+# The project's own launchers (garden.bat, scripts/*.bat) are Windows-only. This
 # script does the same job with pio directly: it installs PlatformIO if it is
 # missing, checks out the firmware, builds it, and flashes it to the CYD over
 # USB. Nothing here needs a signed release or a signing key — a build from your
@@ -20,9 +20,9 @@
 
 set -euo pipefail
 
-REPO_DEFAULT="https://github.com/marine1988/kajo-dash.git"
-DIR_DEFAULT="./kajo-dash"
-ENV_NAME="kajo"
+REPO_DEFAULT="https://github.com/marine1988/garden-dash.git"
+DIR_DEFAULT="./garden-dash"
+ENV_NAME="garden"
 MONITOR_SPEED="115200"
 
 REPO="$REPO_DEFAULT"
@@ -61,7 +61,7 @@ run() {
 
 usage() {
   cat <<'EOF'
-KAJO-Dash installer and flasher for macOS.
+Garden-Dash installer and flasher for macOS.
 
 Usage:
   scripts/install_macos.sh                 install, build, flash
@@ -73,7 +73,7 @@ Usage:
 
 Options:
   --port DEV     serial device to flash (found automatically otherwise)
-  --dir PATH     checkout location (default ./kajo-dash)
+  --dir PATH     checkout location (default ./garden-dash)
   --repo URL     git remote to clone (default the fork)
   --no-flash     build only
   --monitor      open the serial monitor at 115200 baud after flashing
@@ -322,7 +322,7 @@ if [ "$DO_FLASH" -eq 1 ]; then
     flash_failed_help
     exit 1
   fi
-  step "Done. The display restarts into KAJO-Dash."
+  step "Done. The display restarts into Garden-Dash."
 else
   step "Skipped flashing. Build output: $DIR/.pio/build/$ENV_NAME/firmware.bin"
 fi

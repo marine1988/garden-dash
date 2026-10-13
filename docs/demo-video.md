@@ -9,7 +9,7 @@ matches the UI fails instead of recording the wrong thing.
 ## Rendering
 
 Needs what the [simulator](development.md#simulator) needs (an installed
-`.pio/libdeps/kajo/lvgl`, CMake, Visual Studio C++ Build Tools, Pillow) and `ffmpeg` in `PATH`
+`.pio/libdeps/garden/lvgl`, CMake, Visual Studio C++ Build Tools, Pillow) and `ffmpeg` in `PATH`
 (or its location in `FFMPEG`). The `start` chapter also drives Google Chrome through Playwright
 (`pip install playwright`; it uses the installed Chrome and downloads no browser) and needs a
 monospace font for the menu (Consolas, or DejaVu Sans Mono or Liberation Mono).
@@ -27,7 +27,7 @@ for speed while drafting. Everything lands in `dist/demo/`, which git ignores.
 
 | # | Chapter | Shows |
 | --- | --- | --- |
-| 1 | `start` | a readable Windows first-install guide, then a separate optional developer tour: cloning and `kajo.bat`, the simulator and the layout editor |
+| 1 | `start` | a readable Windows first-install guide, then a separate optional developer tour: cloning and `garden.bat`, the simulator and the layout editor |
 | 2 | `themes` | a speed edit of the twelve dashboard themes on their live previews, and saving one |
 | 3 | `customize` | Dual Gauge in magenta; dark, light and auto appearance; background and gradient; what each readout shows |
 | 4 | `replay` | on-device ride replay: seek, play, zoom, charts, summary |
@@ -114,7 +114,7 @@ chapter's note says so.
 
 The `start` chapter is not firmware footage and says so on its rail. The layout editor in it is
 the real `tools/layout_editor.html` in Chrome, served read-only so nothing can be saved. The
-`kajo.bat` menu is **redrawn**: its entries come from `kajo.bat`, its help column from
+`garden.bat` menu is **redrawn**: its entries come from `garden.bat`, its help column from
 `scripts/menu_help.txt` and its layout and colours from `scripts/menu.ps1`, but it is a picture of
 the menu and not a console recording. The companion-app entry is left out because it exists only
 with the private checkout, which a fresh clone does not have.

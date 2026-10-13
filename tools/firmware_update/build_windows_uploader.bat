@@ -11,14 +11,14 @@ set "WORK_DIR=%PROJECT_DIR%\.pio\pyinstaller-firmware-uploader"
 
 if not exist "%VENV_PY%" (
   echo Create the project uploader environment first by running
-  echo kajo.bat --ble from the source checkout.
+  echo garden.bat --ble from the source checkout.
   exit /b 1
 )
 
 "%VENV_PY%" -m pip install -r "%REQUIREMENTS%" "pyinstaller>=6,<7"
 if errorlevel 1 exit /b 1
 
-"%VENV_PY%" -m PyInstaller "%UPLOADER%" --noconfirm --clean --onefile --console --name "KAJO Firmware Uploader" --paths "%TOOL_DIR%" --collect-data esptool --distpath "%DIST_DIR%" --workpath "%WORK_DIR%" --specpath "%WORK_DIR%"
+"%VENV_PY%" -m PyInstaller "%UPLOADER%" --noconfirm --clean --onefile --console --name "GARDEN Firmware Uploader" --paths "%TOOL_DIR%" --collect-data esptool --distpath "%DIST_DIR%" --workpath "%WORK_DIR%" --specpath "%WORK_DIR%"
 if errorlevel 1 exit /b 1
 
 rem The release builder rebuilds the EXE whenever this record no longer
@@ -28,4 +28,4 @@ if errorlevel 1 exit /b 1
 
 echo.
 echo Standalone uploader created:
-echo   %DIST_DIR%\KAJO Firmware Uploader.exe
+echo   %DIST_DIR%\GARDEN Firmware Uploader.exe

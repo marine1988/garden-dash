@@ -11,8 +11,9 @@ namespace {
 constexpr uint16_t kStationaryValuesCrc = 0x594A;
 constexpr uint16_t kStationarySetupCrc = 0x8D56;
 // Covers the firmware-version payload including the device name, so renaming
-// the fixture changes this value even when the frame length does not.
-constexpr uint16_t kStationaryFwCrc = 0x5603;
+// the fixture changes this value -- and the frame length, when the new name is
+// a different length -- rather than passing silently.
+constexpr uint16_t kStationaryFwCrc = 0x924F;
 
 bool framingOk(const uint8_t *frame, size_t length, uint8_t command, uint16_t expectedCrc) {
   if (length < 6 || frame[0] != 2 || frame[length - 1] != 3) return false;
@@ -45,8 +46,11 @@ int main() {
     return 1;
   }
   length = fake_vesc::makeFwVersionFrame(frame, sizeof(frame));
-  if (length != 18 || !framingOk(frame, length, 0, kStationaryFwCrc)) {
-    std::fprintf(stderr, "VESC sender: firmware version frame mismatch (len %zu)\n", length);
+  if (length != 20 || !framingOk(frame, length, 0, kStationaryFwCrc)) {
+    const uint16_t crc =
+        length >= 3 ? uint16_t(uint16_t(frame[length - 3]) << 8) | frame[length - 2] : 0;
+    std::fprintf(stderr, "VESC sender: firmware version frame mismatch (len %zu, crc 0x%04X)\n",
+                 length, crc);
     return 1;
   }
 

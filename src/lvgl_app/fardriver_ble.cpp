@@ -168,7 +168,7 @@ static DiagnosticScanCallbacks scanCallbacks;
 
 static void ensureNimbleInitialized() {
   if (nimbleInitialized) return;
-  if (!NimBLEDevice::isInitialized()) NimBLEDevice::init("KAJO-Dash");
+  if (!NimBLEDevice::isInitialized()) NimBLEDevice::init("Garden-Dash");
   NimBLEDevice::setPower(3);
   NimBLEScan *scan = NimBLEDevice::getScan();
   scan->setScanCallbacks(&scanCallbacks, false);

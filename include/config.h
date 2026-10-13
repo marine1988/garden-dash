@@ -7,7 +7,7 @@
 constexpr int TFT_BACKLIGHT_PIN = 21;
 
 // The version being worked towards: the next release, not the last one. The
-// release builder (option 5 in kajo.bat) releases whatever these say, records
+// release builder (option 5 in garden.bat) releases whatever these say, records
 // it in RELEASES.md, and then moves them on to the next version. Edit them by
 // hand to choose a different next version.
 //
@@ -20,7 +20,7 @@ constexpr int TFT_BACKLIGHT_PIN = 21;
 
 // What the display shows as its version, on the boot splash and in Settings.
 // Test packages from the release builder are built with
-// CYD_FIRMWARE_TEST_BUILD (the kajo_test_package environment), so a board
+// CYD_FIRMWARE_TEST_BUILD (the garden_test_package environment), so a board
 // running one says so; they carry the same version code as the release they
 // lead up to.
 #ifdef CYD_FIRMWARE_TEST_BUILD
@@ -67,7 +67,7 @@ constexpr int CYD_LDR_BRIGHT_RAW = 100;  // raw in normal light -> max brightnes
 
 // CYD_* names throughout this firmware describe the ESP32-2432S028R "Cheap
 // Yellow Display" board -- its pinout, its panel variants, its icon and layout
-// assets. They are deliberately not branded: the product is KAJO-Dash, the
+// assets. They are deliberately not branded: the product is Garden-Dash, the
 // board it runs on is a CYD, and collapsing the two would lose the distinction
 // a reader needs when wiring or picking a panel profile.
 

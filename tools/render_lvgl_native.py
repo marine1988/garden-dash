@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "tools" / "lvgl_native_preview"
 BUILD = SOURCE / "build_contact_sheet"
 OUT = ROOT / "preview_output" / "lvgl"
-LVGL = ROOT / ".pio" / "libdeps" / "kajo" / "lvgl"
+LVGL = ROOT / ".pio" / "libdeps" / "garden" / "lvgl"
 THUMBNAIL_HEADER = ROOT / "include" / "cyd_dash_thumbnails_4bit.h"
 W, H = 320, 240
 
@@ -217,8 +217,8 @@ def find_executable() -> Path:
 def build_renderer(reconfigure: bool = False) -> Path:
     if not LVGL.joinpath("lvgl.h").exists():
         raise FileNotFoundError(
-            "The PlatformIO LVGL library is missing. Build the kajo environment once, then retry: "
-            "pio run -e kajo"
+            "The PlatformIO LVGL library is missing. Build the garden environment once, then retry: "
+            "pio run -e garden"
         )
     if shutil.which("cmake") is None:
         raise FileNotFoundError("CMake was not found in PATH")

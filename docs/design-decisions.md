@@ -103,7 +103,7 @@ changes it even though the frame length does not.
 
 ## Naming and wire formats
 
-The project was CYD, then TEHO-Dash, then KAJO. Renames of this kind hide from
+The project was CYD, then TEHO-Dash, then GARDEN. Renames of this kind hide from
 plain grep, and two rounds of debris have already had to be swept up.
 
 **Identifiers that cross the wire moved while nothing was published**, because

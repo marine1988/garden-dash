@@ -19,14 +19,14 @@ and any failed step. Test both original and alternate CYD panels.
       on configured settings.
 - [ ] Power-up holds a blank white screen through panel bring-up with no garbage
       frame or visible step when the display is enabled.
-- [ ] White fades through darkness into the black KAJO artwork, then the artwork
+- [ ] White fades through darkness into the black GARDEN artwork, then the artwork
       fades through darkness into the UI without tearing or partially drawn frames.
-- [ ] Both light and dark dashboards show the same black/orange KAJO artwork;
+- [ ] Both light and dark dashboards show the same black/orange GARDEN artwork;
       the first-boot setup screen uses the same final fade.
 - [ ] Calibration and recovery status text still renders normally after the
       splash has drawn.
 - [ ] Both panel profiles behave: check the alternate/inverted panel renders the
-      initial blank screen white and the KAJO splash black.
+      initial blank screen white and the GARDEN splash black.
 - [ ] Automatic panel detection selects the correct profile.
 - [ ] Standard and alternate profile buttons produce the expected reference
       colors and persist through reboot.

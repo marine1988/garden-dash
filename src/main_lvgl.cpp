@@ -11,7 +11,7 @@
 //
 // LVGL variant of the CYD VESC telemetry firmware. Same features and screens
 // as src/main.cpp, rendered with LVGL widgets instead of direct TFT_eSPI
-// drawing. Built by the kajo environment (scripts\upload_firmware_usb.bat).
+// drawing. Built by the garden environment (scripts\upload_firmware_usb.bat).
 #include <Arduino.h>
 #include <Preferences.h>
 #include <TFT_eSPI.h>
@@ -19,7 +19,7 @@
 
 
 #include "config.h"
-#include "kajo_splash_generated.h"
+#include "garden_splash_generated.h"
 #include "lvgl_app/app_state.h"
 #include "lvgl_app/controller_manager.h"
 #include "lvgl_app/display_panel_tuning.h"
@@ -37,7 +37,7 @@
 // not something firmware can prevent.
 //
 // Keep that white stable during panel bring-up, then deliberately fade the
-// backlight down, paint the black KAJO artwork, and fade it up. The artwork
+// backlight down, paint the black GARDEN artwork, and fade it up. The artwork
 // stays black for both dashboard appearances. The final handoff uses the same
 // fade-through-darkness technique so partial drawing is never visible.
 //
@@ -852,7 +852,7 @@ constexpr uint32_t SPLASH_MIN_MS = 700;
 
 static void drawSplash() {
   tft.fillScreen(TFT_BLACK);
-  for (const auto &triangle : kajo_splash::triangles) {
+  for (const auto &triangle : garden_splash::triangles) {
     tft.fillTriangle(triangle.x0, triangle.y0, triangle.x1, triangle.y1,
                      triangle.x2, triangle.y2, triangle.color);
   }

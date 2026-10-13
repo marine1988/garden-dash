@@ -94,7 +94,7 @@ class ClientCallbacks : public NimBLEClientCallbacks {
 } clientCallbacks;
 
 void initBle() {
-  if (!NimBLEDevice::isInitialized()) NimBLEDevice::init("KAJO-Dash");
+  if (!NimBLEDevice::isInitialized()) NimBLEDevice::init("Garden-Dash");
   NimBLEScan *scan = NimBLEDevice::getScan();
   scan->setScanCallbacks(&scanCallbacks, false);
   scan->setActiveScan(true);

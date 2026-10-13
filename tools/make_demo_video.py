@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the KAJO-Dash demo video chapters from the firmware simulator.
+"""Render the Garden-Dash demo video chapters from the firmware simulator.
 
 A chapter is a scene script in tools/demo/scenes. The scene recorder
 (tools/lvgl_native_preview/demo_recorder.cpp) boots the real firmware UI, plays the script in
@@ -32,7 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "tools" / "lvgl_native_preview"
 BUILD = SOURCE / "build_demo_recorder"
-LVGL = ROOT / ".pio" / "libdeps" / "kajo" / "lvgl"
+LVGL = ROOT / ".pio" / "libdeps" / "garden" / "lvgl"
 SCENES = ROOT / "tools" / "demo" / "scenes"
 STORIES = ROOT / "tools" / "demo"
 CUT = ROOT / "tools" / "demo" / "cut.json"
@@ -65,7 +65,7 @@ WHITE = (255, 255, 255)
 SOFT = (214, 219, 224)
 MUTED = (140, 147, 155)
 
-DISCLOSURE = "Rendered from the KAJO-Dash firmware simulator: the real UI code, running on a PC. Demo data."
+DISCLOSURE = "Rendered from the Garden-Dash firmware simulator: the real UI code, running on a PC. Demo data."
 REPOSITORY = "github.com/evcollector/kajo-dash"
 
 
@@ -318,8 +318,8 @@ def recorder_executable() -> Path | None:
 def build_recorder() -> Path:
     if not LVGL.joinpath("lvgl.h").exists():
         raise FileNotFoundError(
-            "The PlatformIO LVGL library is missing. Build the kajo environment once, then retry: "
-            "pio run -e kajo"
+            "The PlatformIO LVGL library is missing. Build the garden environment once, then retry: "
+            "pio run -e garden"
         )
     if shutil.which("cmake") is None:
         raise FileNotFoundError("CMake was not found in PATH")
@@ -513,7 +513,7 @@ def render_rail_static(number: int | None, title: str, subtitle: str, note: str 
     layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
 
-    lockup = fitted(brand("kajo-lockup-horizontal.png"), 300)
+    lockup = fitted(brand("garden-lockup-horizontal.png"), 300)
     layer.alpha_composite(lockup, (0, 0))
     y = lockup.height + 78
 
@@ -575,7 +575,7 @@ def render_card(number: int | None, title: str, subtitle: str, lines: list[str] 
     width, height = CANVAS
     image = Image.new("RGB", CANVAS, INK)
     draw = ImageDraw.Draw(image)
-    mark = fitted(brand("kajo-lockup-stacked.png"), 420)
+    mark = fitted(brand("garden-lockup-stacked.png"), 420)
     image.paste(mark, ((width - mark.width) // 2, 150), mark)
     y = 150 + mark.height + 70
     if number is not None:

@@ -15,7 +15,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo Building and starting the KAJO-Dash simulator...
+echo Building and starting the Garden-Dash simulator...
 echo The first build downloads SDL2 and can take a few minutes.
 echo.
 

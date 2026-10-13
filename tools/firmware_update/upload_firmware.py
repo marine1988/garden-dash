@@ -53,7 +53,7 @@ async def find_device(address: str | None, timeout: float, service_uuid: str = S
 
 
 async def request_update_mode(device) -> None:
-    print(f"Connecting to {device.name or 'KAJO-Dash Bluetooth Link'} [{device.address}]")
+    print(f"Connecting to {device.name or 'Garden-Dash Bluetooth Link'} [{device.address}]")
     async with BleakClient(device, timeout=15.0) as client:
         if client.services.get_service(SERVICE_UUID):
             return
@@ -99,7 +99,7 @@ async def find_or_prepare_update_device(address: str | None, timeout: float):
         if entry is None:
             entry = await find_device(None, timeout, COMPANION_SERVICE_UUID)
     if entry is None:
-        raise RuntimeError("KAJO-Dash display not found; open Settings > Information > Bluetooth Link")
+        raise RuntimeError("Garden-Dash display not found; open Settings > Information > Bluetooth Link")
 
     await request_update_mode(entry)
     # The display acknowledges first, then replaces Bluetooth Link with the signed OTA
@@ -146,7 +146,7 @@ async def upload(args) -> None:
     transport = release.transport_path.read_bytes()
     sectors = list(transport_sectors(transport))
     device = await find_or_prepare_update_device(args.address, args.scan_timeout)
-    print(f"Connecting to {device.name or 'KAJO-Dash Firmware Update'} [{device.address}]")
+    print(f"Connecting to {device.name or 'Garden-Dash Firmware Update'} [{device.address}]")
 
     async with BleakClient(device, timeout=15.0) as client:
         data_characteristic = client.services.get_characteristic(DATA_UUID)
@@ -279,7 +279,7 @@ def install_over_usb(args) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Upload a signed firmware release to a KAJO-Dash display")
+    parser = argparse.ArgumentParser(description="Upload a signed firmware release to a Garden-Dash display")
     parser.add_argument("manifest", type=Path, help="signed release JSON produced by sign_firmware.py")
     parser.add_argument("--firmware", type=Path, help="override the image path recorded in the release JSON")
     parser.add_argument("--address", help="specific Bluetooth address instead of service discovery")

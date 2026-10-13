@@ -3510,9 +3510,9 @@ static void refreshCompanionScreen(bool force) {
                  "Diese Seite öffnet Bluetooth Link.", "Ouvrez cette page pour Bluetooth Link.",
                  "Abra esta página para usar Bluetooth Link.", "Apri questa pagina per Bluetooth Link.");
   else if (status.state == COMPANION_BLE_ADVERTISING)
-    detail = txt("Open KAJO Companion and connect to Bluetooth Link.", "Avaa KAJO Companion ja yhdistä Bluetooth Linkiin.",
-                 "KAJO Companion öffnen und mit Bluetooth Link verbinden.", "Ouvrez KAJO Companion et connectez Bluetooth Link.",
-                 "Abra KAJO Companion y conecte Bluetooth Link.", "Apri KAJO Companion e collega Bluetooth Link.");
+    detail = txt("Open GARDEN Companion and connect to Bluetooth Link.", "Avaa GARDEN Companion ja yhdistä Bluetooth Linkiin.",
+                 "GARDEN Companion öffnen und mit Bluetooth Link verbinden.", "Ouvrez GARDEN Companion et connectez Bluetooth Link.",
+                 "Abra GARDEN Companion y conecte Bluetooth Link.", "Apri GARDEN Companion e collega Bluetooth Link.");
   setLabelText(companionDetailLabel, detail);
 
   char timer[72];
@@ -3716,7 +3716,7 @@ static void refreshFirmwareUpdateScreen(bool force) {
     snprintf(progressText, sizeof(progressText), "%.1f / %.1f KiB  |  %d%%",
              status.expectedOffset / 1024.0, status.totalBytes / 1024.0, progress);
   else if (firmwareUpdateUserMode && status.state == FIRMWARE_UPDATE_BLE_ADVERTISING)
-    snprintf(progressText, sizeof(progressText), "%s", "KAJO-Dash Firmware Update");
+    snprintf(progressText, sizeof(progressText), "%s", "Garden-Dash Firmware Update");
   else
     snprintf(progressText, sizeof(progressText), "%s", status.keyConfigured ? "SHA-256 + ECDSA P-256" : "NO RELEASE KEY");
   setLabelText(firmwareUpdateProgressLabel, progressText);
@@ -3899,12 +3899,12 @@ static void showFirmwareUpdate() {
   lv_obj_t *notice = makeInfoPanel(scr, 18, 151, 284, 39, 6);
   lv_obj_t *noticeLabel = makeLabelAt(
       notice, 142, 7,
-      txt("Keep power connected. Only signed KAJO-Dash images are accepted.",
-          "Pidä virta kytkettynä. Vain allekirjoitetut KAJO-Dash-ohjelmistot hyväksytään.",
-          "Strom angeschlossen lassen. Nur signierte KAJO-Dash-Images.",
-          "Gardez l'alimentation. Images KAJO-Dash signées uniquement.",
-          "Mantenga la alimentación. Solo imágenes KAJO-Dash firmadas.",
-          "Mantieni l'alimentazione. Solo immagini KAJO-Dash firmate."),
+      txt("Keep power connected. Only signed Garden-Dash images are accepted.",
+          "Pidä virta kytkettynä. Vain allekirjoitetut Garden-Dash-ohjelmistot hyväksytään.",
+          "Strom angeschlossen lassen. Nur signierte Garden-Dash-Images.",
+          "Gardez l'alimentation. Images Garden-Dash signées uniquement.",
+          "Mantenga la alimentación. Solo imágenes Garden-Dash firmadas.",
+          "Mantieni l'alimentazione. Solo immagini Garden-Dash firmate."),
       c565(COLOR565_LABEL), &lv_font_rajdhani_12, 3);
   lv_obj_set_pos(noticeLabel, 7, 5);
   lv_obj_set_width(noticeLabel, 270);

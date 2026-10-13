@@ -1,5 +1,5 @@
 <#
-Interactive menu for kajo.bat.
+Interactive menu for garden.bat.
 
 Draws header lines, section headings and numbered items, and moves a
 highlighted cursor with Up/Down or W/S. Enter picks the highlighted item; an
@@ -16,7 +16,7 @@ Each argument after the named ones is one line of the menu, in order:
   "key|label|description"     an item; the key is a single digit
 
 Exit code: 100 + the chosen digit, or 110 to quit. Any other code means the
-menu could not run, and kajo.bat falls back to its plain numbered prompt.
+menu could not run, and garden.bat falls back to its plain numbered prompt.
 Deliberately ASCII-only and PowerShell 5.1 compatible, like everything that
 has to work on a fresh Windows install.
 #>

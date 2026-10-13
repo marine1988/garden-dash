@@ -174,7 +174,7 @@ Other capture names: `25_replay_edge`, `25_replay_playing`, `25_replay_gap`,
 `25_replay_charts`, `25_replay_charts_two`, `25_replay_fields`,
 `25_replay_four`, `25_replay_four_low`, `25_replay_phase`, `25_replay_two`, `25_replay_one`,
 `25_replay_zoom`, `25_replay_zoom_max`, `25_replay_zoom_four`, `25_ride_logs`, `25_ride_logs_recording`, `25_ride_logs_clearing`, `25_ride_logs_cleared` and `25_ride_logs_clear_failed`. Add `--lang=fi` (or en/de/fr/es/it)
-to check translations. Firmware compile: `platformio run -e kajo`.
+to check translations. Firmware compile: `platformio run -e garden`.
 
 `python tools/render_lvgl_native.py` also renders every `25_replay*` state into
 `preview_output/lvgl/` with the rest of the preview set, so they appear on

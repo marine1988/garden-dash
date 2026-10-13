@@ -1,9 +1,9 @@
-# KAJO Contributor Licence Agreement
+# GARDEN Contributor Licence Agreement
 
 **Version 1.0 — 2026-09-22**
 
 Most contributions do not require this agreement. It applies only to
-project-owned, hand-written KAJO-Dash firmware source in `src/main_lvgl.cpp`,
+project-owned, hand-written Garden-Dash firmware source in `src/main_lvgl.cpp`,
 `src/lvgl_app/`, and `include/` (a **Covered Contribution**).
 
 Generated files, third-party material, fonts, documentation, tools, tests,
@@ -12,11 +12,11 @@ previews, and assets are not covered. Neither are the test-sender firmwares in
 
 ## Public licence
 
-Every Covered Contribution remains publicly available as part of KAJO-Dash
+Every Covered Contribution remains publicly available as part of Garden-Dash
 under GPL-3.0-or-later. You retain ownership and may use or license your
 contribution elsewhere.
 
-## Additional KAJO licence
+## Additional GARDEN licence
 
 For this agreement, the **Project Owner** is the natural person who owned and
 operated the GitHub account `villevu`, identified by the immutable numeric
@@ -27,8 +27,8 @@ For each Covered Contribution, you grant the Project Owner a perpetual,
 worldwide, non-exclusive, royalty-free licence to use, reproduce, modify,
 distribute, and sublicense that contribution as part of:
 
-- KAJO Companion and its renamed or successor versions; and
-- KAJO-Dash-based commercial or white-label products authorized by the Project
+- GARDEN Companion and its renamed or successor versions; and
+- Garden-Dash-based commercial or white-label products authorized by the Project
   Owner.
 
 Those products may be distributed under non-open-source terms, including
@@ -36,7 +36,7 @@ through application stores.
 
 This additional licence may be exercised only for versions of the Covered
 Contribution whose corresponding source, including modifications to that
-contribution, is publicly available in the KAJO-Dash project under
+contribution, is publicly available in the Garden-Dash project under
 GPL-3.0-or-later. Any sublicense must preserve this condition.
 
 ## Patents
@@ -46,7 +46,7 @@ worldwide, non-exclusive, royalty-free patent licence to make, have made, use,
 sell, offer for sale, import, and otherwise transfer products containing the
 Covered Contribution, but only for patent claims you control that are
 necessarily infringed by the Covered Contribution itself or by its combination
-with KAJO-Dash.
+with Garden-Dash.
 
 ## Your confirmation
 
@@ -62,7 +62,7 @@ You confirm that:
 ## Successors
 
 The Project Owner may transfer this agreement to an entity that operates
-KAJO-Dash or KAJO Companion, provided that the entity accepts the obligations
+Garden-Dash or GARDEN Companion, provided that the entity accepts the obligations
 in this agreement.
 
 ## Acceptance

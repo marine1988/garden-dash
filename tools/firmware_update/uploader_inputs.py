@@ -1,6 +1,6 @@
 """What the standalone uploader EXE is built from, so a stale one is never shipped.
 
-The release builder packages dist/firmware_update/KAJO Firmware Uploader.exe
+The release builder packages dist/firmware_update/GARDEN Firmware Uploader.exe
 into the Windows ZIP. An EXE left over from before an uploader change would
 ship the old uploader silently, so build_windows_uploader.bat stamps each EXE it
 builds with a fingerprint of its inputs, and the release builder rebuilds
@@ -30,7 +30,7 @@ ROOT = TOOLS.parents[1]
 ENTRY = TOOLS / "upload_firmware.py"
 REQUIREMENTS = TOOLS / "requirements.txt"
 BUILD_FILES = (REQUIREMENTS, TOOLS / "build_windows_uploader.bat")
-EXE = ROOT / "dist" / "firmware_update" / "KAJO Firmware Uploader.exe"
+EXE = ROOT / "dist" / "firmware_update" / "GARDEN Firmware Uploader.exe"
 
 
 def local_modules(entry: Path = ENTRY) -> list[Path]:

@@ -7,7 +7,7 @@ state.
 
 There is no second desktop implementation of any screen: the same
 `app_logic.cpp`, `controller_manager.cpp`, `dashboards.cpp`, `screens.cpp` and
-`ui_common.cpp` that the `kajo` firmware builds are linked here against the
+`ui_common.cpp` that the `garden` firmware builds are linked here against the
 same LVGL version, fonts and assets, and rendered into the same 320x240 RGB565
 framebuffer with the same 26-line partial-buffer shape.
 
@@ -151,7 +151,7 @@ Release tree carries no symbols; configure a throwaway one that does and run it
 under the Windows SDK debugger, which names the faulting function directly:
 
 ```powershell
-cmake -S tools/lvgl_native_preview -B tools/lvgl_native_preview/build_sym -DLVGL_DIR=.pio/libdeps/kajo/lvgl
+cmake -S tools/lvgl_native_preview -B tools/lvgl_native_preview/build_sym -DLVGL_DIR=.pio/libdeps/garden/lvgl
 cmake --build tools/lvgl_native_preview/build_sym --config RelWithDebInfo --target cyd_lvgl_preview
 & "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" -g -G -c "g; k 25; q" tools/lvgl_native_preview/build_sym/RelWithDebInfo/cyd_lvgl_renderer.exe preview_output/scratch
 ```
@@ -171,7 +171,7 @@ opening — which fails deterministically in `cyd_runtime_input` on any build.
   `tools/lvgl_native_preview/` or test support. Shared production code may
   expose a narrow observable or injectable dependency, but must never contain a
   simulator-only behaviour path for a real user action.
-- The PlatformIO `kajo` target must keep building from the same shared sources.
+- The PlatformIO `garden` target must keep building from the same shared sources.
 - UI work follows [ui-components.md](ui-components.md), uses the tokens in
   `src/lvgl_app/ui_style.h`, and satisfies the native-preview and translation
   requirements in `AGENTS.md`.

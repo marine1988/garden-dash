@@ -1,9 +1,9 @@
 # Releases
 
-Every published KAJO-Dash firmware release, oldest first.
+Every published Garden-Dash firmware release, oldest first.
 
 The version being worked on is the one in `include/config.h`. Option 5 in
-`kajo.bat` packages it: **T** makes a test package for your own boards, which
+`garden.bat` packages it: **T** makes a test package for your own boards, which
 shows as `0.01-test` on the display and changes nothing here; **R** releases it.
 A release adds its row to this table in the commit it tags (`v0.01`), then moves
 `include/config.h` on to the next version. "Building a release" in

@@ -212,17 +212,17 @@ cyd::preview::NativeMenuState menuState(const Options &options) {
 void updatePerformanceTitle(SDL_Window *window, const Options &options,
                             const cyd::preview::FrameMetrics *metrics) {
   if (!options.performanceOverlay) {
-    SDL_SetWindowTitle(window, "KAJO-Dash Simulator");
+    SDL_SetWindowTitle(window, "Garden-Dash Simulator");
     return;
   }
   if (!metrics) {
-    SDL_SetWindowTitle(window, "KAJO-Dash Simulator | Performance: waiting for a completed frame");
+    SDL_SetWindowTitle(window, "Garden-Dash Simulator | Performance: waiting for a completed frame");
     return;
   }
 
   const double pacedFrameMs = std::max(30.0, metrics->estimatedCydMs);
   std::ostringstream title;
-  title << std::fixed << std::setprecision(2) << "KAJO-Dash Simulator | "
+  title << std::fixed << std::setprecision(2) << "Garden-Dash Simulator | "
         << (options.performanceMode == PerformanceMode::EstimatedCyd ? "ESTIMATED CYD" : "HOST")
         << " | pace " << pacedFrameMs << " ms / " << 1000.0 / pacedFrameMs << " FPS"
         << " | model " << metrics->estimatedCydMs << " ms | SPI " << metrics->spiTransferMs << " ms | "
@@ -319,7 +319,7 @@ InteractiveResult runInteractive(Options options) {
   }
 
   SDL_Window *window = SDL_CreateWindow(
-      "KAJO-Dash Simulator", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+      "Garden-Dash Simulator", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
       cyd::preview::kDisplayWidth * options.scale, cyd::preview::kDisplayHeight * options.scale,
       SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
   if (!window) {
@@ -556,7 +556,7 @@ int main(int argc, char **argv) {
     // Reset is a one-shot boot action. Menu-triggered restarts must not keep
     // deleting the selected profile unless the user explicitly asks again.
     options.resetState = false;
-    std::cout << "KAJO-Dash simulator ready: 320x240, screen=" << static_cast<int>(uiCurrentScreen())
+    std::cout << "Garden-Dash simulator ready: 320x240, screen=" << static_cast<int>(uiCurrentScreen())
               << (options.headless ? ", headless" : ", interactive") << "\n";
 
     int exitCode = 0;
@@ -586,7 +586,7 @@ int main(int argc, char **argv) {
     }
     return exitCode;
   } catch (const std::exception &error) {
-    std::cerr << "KAJO-Dash simulator failed: " << error.what() << "\n";
+    std::cerr << "Garden-Dash simulator failed: " << error.what() << "\n";
     return 1;
   }
 }

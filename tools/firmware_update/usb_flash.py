@@ -1,6 +1,6 @@
-"""Wired first install of a signed KAJO-Dash release, through esptool.
+"""Wired first install of a signed Garden-Dash release, through esptool.
 
-Bluetooth updates need KAJO-Dash already running on the display. A blank or
+Bluetooth updates need Garden-Dash already running on the display. A blank or
 foreign board is installed over its USB serial port instead, which needs more
 than the application image: the second-stage bootloader, the partition table
 and an OTA-data reset that makes the bootloader start the first app slot.

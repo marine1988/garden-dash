@@ -9,7 +9,7 @@ changing the firmware. The contracts it points to are binding; this page is not.
 | Layer | What | Version | Where it shows up |
 | --- | --- | --- | --- |
 | MCU | ESP32 (classic, dual-core Xtensa LX6), 4 MB flash, no PSRAM | — | Sunton ESP32-2432S028R "CYD" |
-| Build | PlatformIO, `espressif32` platform | 7.0.1 | `platformio.ini`, env `kajo` |
+| Build | PlatformIO, `espressif32` platform | 7.0.1 | `platformio.ini`, env `garden` |
 | Framework | Arduino core for ESP32, on ESP-IDF and **FreeRTOS** | 2.0.17 | `setup()` / `loop()`, tasks, queues, mutexes |
 | UI | **LVGL** | 8.4.0 | `src/lvgl_app/`, configured by `include/lv_conf.h` |
 | Display driver | TFT_eSPI, with DMA | 2.5.43 | `src/main_lvgl.cpp` (flush callback), boot splash |
@@ -154,8 +154,8 @@ hangs on boot rolls back.
 
 | Environment | Purpose |
 | --- | --- |
-| `kajo` | The dashboard firmware (default) |
-| `kajo_test_package` | The same firmware, labelled `-test` on screen, built by the release tool |
+| `garden` | The dashboard firmware (default) |
+| `garden_test_package` | The same firmware, labelled `-test` on screen, built by the release tool |
 | `fardriver_test`, `vesc_test` | Fake controllers for a spare CYD ([test-senders.md](test-senders.md)) |
 
 ## Where to read next

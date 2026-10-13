@@ -213,7 +213,7 @@ class ArtworkTests(unittest.TestCase):
     def test_the_fonts_and_logos_the_artwork_uses_exist(self):
         for weight in ("Bold", "SemiBold"):
             self.assertTrue((demo.FONTS / f"Rajdhani-{weight}.ttf").exists(), weight)
-        for name in ("kajo-lockup-horizontal.png", "kajo-lockup-stacked.png"):
+        for name in ("garden-lockup-horizontal.png", "garden-lockup-stacked.png"):
             self.assertTrue((demo.BRAND / name).exists(), name)
 
     def test_the_background_and_card_fill_the_canvas(self):
@@ -239,8 +239,10 @@ class ArtworkTests(unittest.TestCase):
 
     def test_a_caption_too_long_for_the_rail_is_an_error_not_an_overlap(self):
         _, top, limit = demo.render_rail_static(1, "Title", "Subtitle")
+        # Far past any rail geometry, so the check stays about the error rather
+        # than about a word count that happens to overflow today.
         with self.assertRaises(ValueError) as caught:
-            demo.render_caption(demo.Span(0, 100, "Heading", " ".join(["word"] * 60)), top, limit)
+            demo.render_caption(demo.Span(0, 100, "Heading", " ".join(["word"] * 200)), top, limit)
         self.assertIn("too long", str(caught.exception))
 
     def test_every_caption_in_the_scenes_fits_the_rail(self):
@@ -271,7 +273,7 @@ class ArtworkTests(unittest.TestCase):
             demo.render_caption(demo.Span(0, 1, heading, body), top, limit)  # raises when it does not fit
 
     def test_a_card_with_lines_fills_the_canvas_and_too_many_lines_are_an_error(self):
-        card = demo.render_card(None, "Build it yourself", "Everything runs from the repository.", ["Start with kajo.bat.", demo.REPOSITORY])
+        card = demo.render_card(None, "Build it yourself", "Everything runs from the repository.", ["Start with garden.bat.", demo.REPOSITORY])
         self.assertEqual(card.size, demo.CANVAS)
         with self.assertRaises(ValueError):
             demo.render_card(None, "Title", "Sub", ["a long line of text " * 4] * 12)
@@ -370,7 +372,7 @@ class StartChapterTests(unittest.TestCase):
             self.assertGreaterEqual(captions.events[index + 1]["frame"] - captions.events[index]["frame"], 240)
         self.assertEqual(captions.events[-1]["heading"], start_capture.CAPTIONS["clone"][0])
         self.assertIn("No Python, PlatformIO or app needed", start_capture.CAPTIONS["download"][1])
-        self.assertIn("Install or Update KAJO-Dash.bat", start_capture.CAPTIONS["launch"][1])
+        self.assertIn("Install or Update Garden-Dash.bat", start_capture.CAPTIONS["launch"][1])
 
     def test_the_chapter_is_found_without_a_scene(self):
         self.assertIsNotNone(demo.story_path("start"))
@@ -380,13 +382,13 @@ class StartChapterTests(unittest.TestCase):
     def test_the_chapter_comes_first_because_it_is_where_a_new_user_begins(self):
         self.assertEqual(demo.load_cut()[0], "start")
 
-    def test_the_installer_text_is_what_kajo_bat_prints(self):
+    def test_the_installer_text_is_what_garden_bat_prints(self):
         lines = start_capture.installer_lines()
         self.assertTrue(any("1. Install over USB cable" in line for line in lines))
         self.assertTrue(any("2. Update over Bluetooth" in line for line in lines))
         self.assertTrue(any(line.strip() == "Q. Quit" for line in lines))
 
-    def test_the_menu_is_read_from_kajo_bat_and_leaves_out_the_private_companion_entry(self):
+    def test_the_menu_is_read_from_garden_bat_and_leaves_out_the_private_companion_entry(self):
         entries = start_capture.menu_entries()
         items = [entry for entry in entries if "|" in entry]
         self.assertGreaterEqual(len(items), 8)

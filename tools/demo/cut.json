@@ -9,8 +9,8 @@
   "outro": {
     "title": "Install it. Or make it your own.",
     "subtitle": "Windows release ZIP to install. Source code to develop.",
-    "lines": ["Releases: download, extract, connect USB, run the installer.", "Developers: clone the repo and run kajo.bat.", "github.com/evcollector/kajo-dash"],
-    "mark": "Get KAJO-Dash",
+    "lines": ["Releases: download, extract, connect USB, run the installer.", "Developers: clone the repo and run garden.bat.", "github.com/evcollector/kajo-dash"],
+    "mark": "Get Garden-Dash",
     "seconds": 6
   }
 }

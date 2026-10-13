@@ -16,7 +16,7 @@ and carries its own notices in-app.
 
 Licence texts for components redistributed in the firmware, Windows uploader,
 and companion APK are in `licenses/`.
-The `.kajofw` and Windows updater ZIP include this file, the project `LICENSE`
+The `.gardenfw` and Windows updater ZIP include this file, the project `LICENSE`
 and `NOTICE`, and the `licenses/` texts alongside the signed firmware.
 
 ## Compiled into the firmware binary

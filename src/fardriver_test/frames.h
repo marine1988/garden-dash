@@ -42,7 +42,7 @@ inline void write16(uint8_t *destination, int16_t value) {
   destination[1] = bits >> 8;
 }
 
-// Synthetic fixtures for KAJO's current FarDriver decoder, not a claim of
+// Synthetic fixtures for GARDEN's current FarDriver decoder, not a claim of
 // compatibility with every real controller. Four frame IDs map to E2/E8/D6/F4.
 inline void makeFrame(unsigned sequence, uint8_t (&frame)[kFrameBytes], const Sample &sample = kStationary) {
   for (auto &byte : frame) byte = 0;

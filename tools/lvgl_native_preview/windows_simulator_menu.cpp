@@ -210,7 +210,7 @@ std::filesystem::path NativeSimulatorMenu::chooseScreenshotPath() const {
 }
 
 std::filesystem::path NativeSimulatorMenu::chooseStateProfilePath(const std::filesystem::path &current) const {
-  static constexpr wchar_t filter[] = L"KAJO-Dash simulator state (*.bin)\0*.bin\0All files (*.*)\0*.*\0\0";
+  static constexpr wchar_t filter[] = L"Garden-Dash simulator state (*.bin)\0*.bin\0All files (*.*)\0*.*\0\0";
   return choosePath(static_cast<HWND>(nativeWindow_), current, filter, L"bin", false);
 }
 

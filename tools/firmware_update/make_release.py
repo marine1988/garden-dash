@@ -1,12 +1,12 @@
-"""Release builder for KAJO-Dash firmware.
+"""Release builder for Garden-Dash firmware.
 
-Run it from kajo.bat (option 5), or by double-clicking scripts/make_release.bat.
+Run it from garden.bat (option 5), or by double-clicking scripts/make_release.bat.
 
 include/config.h holds the version being worked towards, and the builder never
 works a version out for itself: it packages whatever config.h says, in one of
 two ways.
 
-- Test package: the firmware built in the kajo_test_package environment, so the
+- Test package: the firmware built in the garden_test_package environment, so the
   display shows "0.01-test", signed and packaged into releases/test/ for your
   own boards, replacing the previous test package. Nothing is committed or
   tagged and the version stays as it is, so make as many as you like.
@@ -68,7 +68,7 @@ PIO_BUILD = ROOT / ".pio" / "build"
 # Inside the checkout, so moving a finished package out of it is a rename.
 STAGING = ROOT / ".pio" / "release-staging"
 UPLOADER_EXE = uploader_inputs.EXE
-INDEX_NAME = "kajo-update.json"
+INDEX_NAME = "garden-update.json"
 CHANGELOG = ROOT / "CHANGELOG.md"
 CHANGELOG_TOOL = ROOT / "tools" / "generate_changelog_header.py"
 CHANGELOG_HEADER = ROOT / "src" / "lvgl_app" / "firmware_changelog.h"
@@ -86,7 +86,7 @@ TEST = "test"
 RELEASE = "release"
 # PlatformIO environments. The test one adds CYD_FIRMWARE_TEST_BUILD, which
 # makes the display show "-test" after its version.
-ENVIRONMENTS = {TEST: "kajo_test_package", RELEASE: "kajo"}
+ENVIRONMENTS = {TEST: "garden_test_package", RELEASE: "garden"}
 
 VERSION_CODE_RE = re.compile(r"(#define\s+CYD_FIRMWARE_VERSION_CODE\s+)(\d+)(UL)?")
 VERSION_NAME_RE = re.compile(r'(#define\s+CYD_FIRMWARE_VERSION_NAME\s+")([^"]*)(")')
@@ -202,9 +202,9 @@ def release_outputs(code: int) -> list[Path]:
     """Every file a release of this version writes, apart from the shared index."""
     stem = f"firmware-v{code}"
     names = [f"{stem}{suffix}" for suffix in (
-        ".json", ".bin", ".zlib", ".kajofw",
+        ".json", ".bin", ".zlib", ".gardenfw",
         "-usb.json", "-bootloader.bin", "-partitions.bin", "-boot_app0.bin")]
-    return [RELEASES / name for name in names] + [DIST / f"KAJO-Dash-Firmware-v{code}-Windows.zip"]
+    return [RELEASES / name for name in names] + [DIST / f"Garden-Dash-Firmware-v{code}-Windows.zip"]
 
 
 def find_platformio() -> str | None:
@@ -368,7 +368,7 @@ def check(mode: str, key: Path | None = None, interactive: bool = True,
         plan.problems.append(problem)
     plan.platformio = find_platformio()
     if not plan.platformio:
-        plan.problems.append("PlatformIO was not found. Run this from kajo.bat or scripts\\make_release.bat, "
+        plan.problems.append("PlatformIO was not found. Run this from garden.bat or scripts\\make_release.bat, "
                              "which offer to install it, or install PlatformIO yourself.")
     if not package_usb.BOOT_APP0.is_file():
         plan.problems.append(f"the Arduino core's boot_app0.bin is missing ({package_usb.BOOT_APP0}); "
@@ -414,12 +414,12 @@ def print_plan(plan: Plan) -> None:
     if plan.is_release:
         rows += [
             ("Writes", f"releases\\{stem}.json, .bin and .zlib, signed"),
-            ("", f"releases\\{stem}.kajofw and releases\\{INDEX_NAME}"),
+            ("", f"releases\\{stem}.gardenfw and releases\\{INDEX_NAME}"),
             ("", f"releases\\{stem}-usb.json and its bootloader, partition and boot_app0 images"),
-            ("", f"dist\\KAJO-Dash-Firmware-v{plan.code}-Windows.zip"),
-            ("Records", f'a RELEASES.md row, commit "Release KAJO-Dash {plan.name}" and tag {plan.tag};'),
+            ("", f"dist\\Garden-Dash-Firmware-v{plan.code}-Windows.zip"),
+            ("Records", f'a RELEASES.md row, commit "Release Garden-Dash {plan.name}" and tag {plan.tag};'),
             ("", f'then include/config.h moves to {plan.next_name} (code {plan.next_code}), '
-                 f'commit "Start KAJO-Dash {plan.next_name}"'),
+                 f'commit "Start Garden-Dash {plan.next_name}"'),
             ("", "Nothing is pushed."),
         ]
         if plan.reset_app:
@@ -428,7 +428,7 @@ def print_plan(plan: Plan) -> None:
     else:
         rows += [
             ("Writes", "releases\\test\\, replacing the previous test package: the signed firmware,"),
-            ("", "its .kajofw, USB layout and Windows ZIP"),
+            ("", "its .gardenfw, USB layout and Windows ZIP"),
             ("Records", f"nothing: no commit, no tag, and include/config.h stays at {plan.name}"),
         ]
     for label, value in rows:
@@ -577,14 +577,14 @@ def execute(plan: Plan, private_key) -> list[Path]:
             # only do if it sees the current one.
             if (RELEASES / INDEX_NAME).is_file():
                 shutil.copy2(RELEASES / INDEX_NAME, STAGING / INDEX_NAME)
-            run([sys.executable, str(TOOLS / "package_kajofw.py"), str(manifest),
-                 "--version-name", plan.name], ".kajofw packaging")
-            archive = f"KAJO-Dash-Firmware-v{plan.code}-Windows.zip"
+            run([sys.executable, str(TOOLS / "package_gardenfw.py"), str(manifest),
+                 "--version-name", plan.name], ".gardenfw packaging")
+            archive = f"Garden-Dash-Firmware-v{plan.code}-Windows.zip"
         else:
-            # kajo-update.json is what phones check for updates: never for a test package.
-            run([sys.executable, str(TOOLS / "package_kajofw.py"), str(manifest), "--no-index"],
-                ".kajofw packaging")
-            archive = f"KAJO-Dash-Firmware-v{plan.code}-test-Windows.zip"
+            # garden-update.json is what phones check for updates: never for a test package.
+            run([sys.executable, str(TOOLS / "package_gardenfw.py"), str(manifest), "--no-index"],
+                ".gardenfw packaging")
+            archive = f"Garden-Dash-Firmware-v{plan.code}-test-Windows.zip"
         run([sys.executable, str(TOOLS / "package_windows_release.py"), "--manifest", str(manifest),
              "--uploader-exe", str(UPLOADER_EXE), "--output", str(STAGING / archive)], "Windows packaging")
 
@@ -608,9 +608,9 @@ def record_release(plan: Plan) -> None:
     paths = [shown(HISTORY)] + ([shown(CHANGELOG_HEADER)] if plan.changelog_stale else [])
     steps = [
         # With paths, git commits only those files, whatever else is staged.
-        (["git", "commit", "-m", f"Release KAJO-Dash {plan.name}", "--", *paths], "commit"),
+        (["git", "commit", "-m", f"Release Garden-Dash {plan.name}", "--", *paths], "commit"),
         (["git", "tag", "-a", plan.tag, "-m",
-          f"KAJO-Dash {plan.name}\n\nfirmware version code {plan.code}"], "tag"),
+          f"Garden-Dash {plan.name}\n\nfirmware version code {plan.code}"], "tag"),
     ]
     for command, what in steps:
         try:
@@ -626,7 +626,7 @@ def record_release(plan: Plan) -> None:
         reset_app_revision()
         print("  Reset the companion app's appRevision to 0 for the new firmware version.")
     try:
-        run(["git", "commit", "-m", f"Start KAJO-Dash {plan.next_name}", "--", shown(CONFIG_HEADER)], "commit")
+        run(["git", "commit", "-m", f"Start Garden-Dash {plan.next_name}", "--", shown(CONFIG_HEADER)], "commit")
     except Abort:
         print(f"include/config.h now says {plan.next_name}, but committing it failed; commit it by hand.")
         return
@@ -647,7 +647,7 @@ def main(argv: list[str] | None = None) -> int:
                              f"password then comes from {PASSWORD_ENV} or a prompt")
     args = parser.parse_args(argv)
 
-    print("KAJO-Dash release builder")
+    print("Garden-Dash release builder")
     if args.mode is None and args.yes:
         raise Abort("--yes needs --test or --release")
     chosen = args.mode or choose_mode()
@@ -671,9 +671,9 @@ def main(argv: list[str] | None = None) -> int:
         if plan.reset_app:
             print("Commit the companion app's appRevision reset in its own repository.")
         print(f"To publish: git push origin {plan.branch} {plan.tag}, then attach the Windows ZIP, "
-              f"firmware-v{plan.code}.kajofw and {INDEX_NAME} to a GitHub release for {plan.tag}.")
+              f"firmware-v{plan.code}.gardenfw and {INDEX_NAME} to a GitHub release for {plan.tag}.")
     else:
-        print(f"Install it with option 6 in kajo.bat, over a USB cable or Bluetooth, or with the "
+        print(f"Install it with option 6 in garden.bat, over a USB cable or Bluetooth, or with the "
               f"ZIP's own launcher. The display shows {plan.label}.")
     return 0
 

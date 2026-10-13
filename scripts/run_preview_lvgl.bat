@@ -47,8 +47,8 @@ if errorlevel 1 (
   echo The renderer needs CMake, Visual Studio C++ Build Tools, and Pillow.
   echo If Pillow is missing, install it with:
   echo   "%PY%" -m pip install pillow
-  echo If .pio\libdeps\kajo\lvgl is missing, first run:
-  echo   pio run -e kajo
+  echo If .pio\libdeps\garden\lvgl is missing, first run:
+  echo   pio run -e garden
   exit /b 1
 )
 

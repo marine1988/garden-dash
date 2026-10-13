@@ -1,10 +1,10 @@
 @echo off
 setlocal
-title KAJO-Dash Layout Editor
+title Garden-Dash Layout Editor
 cd /d "%~dp0.."
 
 set "WRAPPER_PROJECT=%CD%\BrowserWrapper\BrowserWrapper.csproj"
-set "WRAPPER_EXE=%CD%\BrowserWrapper\bin\Release\net8.0-windows\KajoLayoutEditor.exe"
+set "WRAPPER_EXE=%CD%\BrowserWrapper\bin\Release\net8.0-windows\GardenLayoutEditor.exe"
 
 where dotnet >nul 2>nul
 if errorlevel 1 (
@@ -12,11 +12,11 @@ if errorlevel 1 (
   goto browser_fallback
 )
 
-echo Building KAJO-Dash Layout Editor desktop wrapper...
+echo Building Garden-Dash Layout Editor desktop wrapper...
 dotnet build "%WRAPPER_PROJECT%" -c Release
 if errorlevel 1 goto browser_fallback
 
-echo Opening KAJO-Dash Layout Editor desktop app...
+echo Opening Garden-Dash Layout Editor desktop app...
 start "" "%WRAPPER_EXE%" --lvgl
 exit /b 0
 

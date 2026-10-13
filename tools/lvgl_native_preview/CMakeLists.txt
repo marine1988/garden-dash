@@ -131,7 +131,7 @@ if(CYD_BUILD_SIMULATOR)
     configure_file(simulator_icon.rc.in "${CMAKE_CURRENT_BINARY_DIR}/simulator_icon.rc" @ONLY)
     target_sources(cyd_simulator PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/simulator_icon.rc")
     set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/simulator_icon.rc" PROPERTIES
-      OBJECT_DEPENDS "${PROJECT_ROOT}/tools/logo/kajo_app_icon.ico")
+      OBJECT_DEPENDS "${PROJECT_ROOT}/tools/logo/garden_app_icon.ico")
     target_link_libraries(cyd_simulator PRIVATE comdlg32)
   endif()
 endif()

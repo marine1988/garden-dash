@@ -7,7 +7,7 @@ display firmware must use the same OTA protocol version; older variants are not
 supported.
 
 For a test package or an ordinary release, none of the individual commands
-below need to be run by hand -- choose option 5 in `kajo.bat` (or double-click
+below need to be run by hand -- choose option 5 in `garden.bat` (or double-click
 `scripts\make_release.bat`), pick **T** or **R**, check the plan it prints and
 type the key password. It packages the version in `include/config.h`: a test
 package goes to `releases\test\` and shows as `0.01-test` on the display; a
@@ -31,7 +31,7 @@ Create the release key once. The private path must be outside this repository:
 
 ```powershell
 .\.venv\Scripts\python tools\firmware_update\create_release_key.py `
-  --private-key C:\Users\you\Secure\kajo-release-key.pem
+  --private-key C:\Users\you\Secure\garden-release-key.pem
 ```
 
 The tool encrypts the PEM and prompts twice for its password. For unattended
@@ -56,8 +56,8 @@ Sign a built image into a portable release set:
 
 ```powershell
 .\.venv\Scripts\python tools\firmware_update\sign_firmware.py `
-  --firmware .pio\build\kajo\firmware.bin `
-  --private-key C:\Users\you\Secure\kajo-release-key.pem
+  --firmware .pio\build\garden\firmware.bin `
+  --private-key C:\Users\you\Secure\garden-release-key.pem
 ```
 
 The version code and the output path come from `include/config.h`, so they
@@ -71,7 +71,7 @@ This produces three public files with matching stems: `.json`, `.bin`, and
 `.zlib`. The JSON uses relative sibling paths, so the set can be moved to
 another computer. The private key is never copied into `releases`.
 
-Straight after signing, while `.pio\build\kajo` still holds the signed build,
+Straight after signing, while `.pio\build\garden` still holds the signed build,
 add the USB install layout:
 
 ```powershell
@@ -99,7 +99,7 @@ tools\firmware_update\build_windows_uploader.bat
   --manifest releases\firmware-v5.json
 ```
 
-The resulting `dist\KAJO-Dash-Firmware-v5-Windows.zip` contains the uploader EXE,
+The resulting `dist\Garden-Dash-Firmware-v5-Windows.zip` contains the uploader EXE,
 double-click launcher, signed JSON/bin/zlib set, its USB install layout, short
 instructions, and copies of `LICENSE`, `NOTICE`, `THIRD-PARTY-NOTICES.md` and
 the `licenses/` texts. The packager refuses a release without a USB layout. The
@@ -110,7 +110,7 @@ The uploader EXE bundles esptool for the USB install.
 flasher stubs travel with it.
 
 After a successful build, `build_windows_uploader.bat` records what the EXE was
-built from in `KAJO Firmware Uploader.inputs` beside it: a fingerprint of the
+built from in `GARDEN Firmware Uploader.inputs` beside it: a fingerprint of the
 uploader's modules, its requirements and build script, and the installed package
 versions, plus the EXE's own hash (see `uploader_inputs.py`). The release
 builder rebuilds the EXE whenever that record is missing or no longer matches,
@@ -119,7 +119,7 @@ so an uploader from before a change is never packaged by mistake.
 ## End user: first install over USB
 
 The user extracts the complete Windows updater ZIP, connects the display with a
-USB data cable, double-clicks `Install or Update KAJO-Dash.bat` and chooses
+USB data cable, double-clicks `Install or Update Garden-Dash.bat` and chooses
 **1. Install over USB cable**. The uploader picks the one USB serial adapter
 (CH340/CH9102, CP210x, FTDI), ignoring Bluetooth serial ports, and asks which
 one if there are several. It checks the release against its signed manifest
@@ -133,7 +133,7 @@ the BOOT/RST sequence and offers another attempt. A transfer that fails after
 connecting is retried at 115200 baud. When no adapter is found, it says so and
 links the CH340 and CP210x drivers, which Windows usually installs by itself.
 
-In a source checkout, run `kajo.bat --usb`, or call the uploader directly:
+In a source checkout, run `garden.bat --usb`, or call the uploader directly:
 
 ```powershell
 .\.venv\Scripts\python tools\firmware_update\upload_firmware.py `
@@ -143,10 +143,10 @@ In a source checkout, run `kajo.bat --usb`, or call the uploader directly:
 ## End user: install an update
 
 The user extracts the complete Windows updater ZIP, opens Settings > Information
-> Bluetooth Link on the display, double-clicks `Install or Update KAJO-Dash.bat`
+> Bluetooth Link on the display, double-clicks `Install or Update Garden-Dash.bat`
 and chooses **2. Update over Bluetooth**.
 
-In a source checkout, use menu option 6 in `kajo.bat` (Install package) or `kajo.bat --ble`.
+In a source checkout, use menu option 6 in `garden.bat` (Install package) or `garden.bat --ble`.
 The release packager copies that same script under the name above; without the
 development scripts directory it opens the two-choice installer menu.
 
@@ -219,8 +219,8 @@ carrying your trust anchor can then only be updated over USB.
 Pass a specific release or uploader options when needed:
 
 ```bat
-kajo.bat --ble releases\firmware-v5.json --reboot
-kajo.bat --ble --address AA:BB:CC:DD:EE:FF
+garden.bat --ble releases\firmware-v5.json --reboot
+garden.bat --ble --address AA:BB:CC:DD:EE:FF
 ```
 
 The Python uploader can also be called directly:
@@ -234,24 +234,24 @@ For the phone companion app, which is distributed separately, combine those same
 signed artifacts into a single document-picker-friendly bundle:
 
 ```powershell
-.\.venv\Scripts\python tools\firmware_update\package_kajofw.py `
+.\.venv\Scripts\python tools\firmware_update\package_gardenfw.py `
   releases\firmware-v5.json
 ```
 
-The resulting `firmware-v5.kajofw` is an uncompressed ZIP container holding
+The resulting `firmware-v5.gardenfw` is an uncompressed ZIP container holding
 the signed JSON, firmware image, zlib transport, and the same licence and notice
 files. The phone importer ignores those extra entries and still checks the
 manifest and image. Packaging does not have or need the private release key.
-The release builder (option 5 in `kajo.bat`) does this step for you.
+The release builder (option 5 in `garden.bat`) does this step for you.
 
-### `kajo-update.json`
+### `garden-update.json`
 
-Packaging also refreshes `releases/kajo-update.json`, a small index that is
+Packaging also refreshes `releases/garden-update.json`, a small index that is
 attached to each GitHub release under that fixed name. An app finds the newest
 firmware without the GitHub API, and so without its rate limit, at:
 
 ```
-https://github.com/<owner>/<repo>/releases/latest/download/kajo-update.json
+https://github.com/<owner>/<repo>/releases/latest/download/garden-update.json
 ```
 
 ```json
@@ -262,7 +262,7 @@ https://github.com/<owner>/<repo>/releases/latest/download/kajo-update.json
   "version_code": 5,
   "version_name": "0.05",
   "tag": "v0.05",
-  "bundle": "firmware-v5.kajofw",
+  "bundle": "firmware-v5.gardenfw",
   "bundle_size": 1024000,
   "bundle_sha256": "…"
 }
@@ -284,8 +284,8 @@ None of this is trusted for safety. The display still verifies the ECDSA
 signature and refuses lower version codes without physical confirmation, so a
 tampered index or bundle can at worst fail to install.
 
-A release's public assets are therefore the Windows updater ZIP, the `.kajofw`
-bundle and `kajo-update.json`. Packaging never rewrites the index to describe an
+A release's public assets are therefore the Windows updater ZIP, the `.gardenfw`
+bundle and `garden-update.json`. Packaging never rewrites the index to describe an
 older version than it already does, and `--version-name` supplies the display
 name when `include/config.h` has already moved past the release being packaged.
 If you also attach a raw `.bin` or the JSON/bin/zlib set, attach `LICENSE`,

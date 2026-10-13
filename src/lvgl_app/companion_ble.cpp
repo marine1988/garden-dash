@@ -294,8 +294,8 @@ ControlCallbacks controlCallbacks;
 ServerCallbacks serverCallbacks;
 
 bool startServer() {
-  if (!NimBLEDevice::isInitialized()) NimBLEDevice::init("KAJO Companion");
-  NimBLEDevice::setDeviceName("KAJO Companion");
+  if (!NimBLEDevice::isInitialized()) NimBLEDevice::init("GARDEN Companion");
+  NimBLEDevice::setDeviceName("GARDEN Companion");
   NimBLEDevice::setPower(3);
   NimBLEDevice::setMTU(247);
   server = NimBLEDevice::createServer();
@@ -320,7 +320,7 @@ bool startServer() {
   // Scan response first: the name then goes there and the 128-bit service
   // UUID fits in the advertisement itself, where filtered scans see it.
   advertising->enableScanResponse(true);
-  advertising->setName("KAJO Companion");
+  advertising->setName("GARDEN Companion");
   advertising->addServiceUUID(COMPANION_SERVICE_UUID);
   if (!NimBLEDevice::startAdvertising()) return false;
   sessionDeadlineMs = millis() + kAdvertisingTimeoutMs;

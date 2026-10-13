@@ -10,13 +10,13 @@ from usb_flash import load_usb_layout, usb_layout_path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_EXE = ROOT / "dist" / "firmware_update" / "KAJO Firmware Uploader.exe"
-LAUNCHER = ROOT / "kajo.bat"
-LAUNCHER_NAME = "Install or Update KAJO-Dash.bat"
+DEFAULT_EXE = ROOT / "dist" / "firmware_update" / "GARDEN Firmware Uploader.exe"
+LAUNCHER = ROOT / "garden.bat"
+LAUNCHER_NAME = "Install or Update Garden-Dash.bat"
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Package a signed KAJO-Dash release for non-technical Windows users")
+    parser = argparse.ArgumentParser(description="Package a signed Garden-Dash release for non-technical Windows users")
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--uploader-exe", type=Path, default=DEFAULT_EXE)
     parser.add_argument("--output", type=Path)
@@ -35,12 +35,12 @@ def main() -> int:
 
     notices = release_notice_files()
     output = (args.output or
-              (ROOT / "dist" / f"KAJO-Dash-Firmware-v{release.version_code}-Windows.zip")).resolve()
+              (ROOT / "dist" / f"Garden-Dash-Firmware-v{release.version_code}-Windows.zip")).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists():
         parser.error(f"refusing to overwrite package: {output}")
 
-    instructions = f"""KAJO-Dash firmware v{release.version_code} for Windows
+    instructions = f"""Garden-Dash firmware v{release.version_code} for Windows
 
 Extract every file from this ZIP, then double-click {LAUNCHER_NAME}.
 
@@ -52,7 +52,7 @@ First install, over a USB cable:
 If the display is not detected, hold its BOOT button, tap RST, and keep holding
 BOOT until writing starts. Settings already on the display are kept.
 
-Update, over Bluetooth, once KAJO-Dash is running:
+Update, over Bluetooth, once Garden-Dash is running:
 1. On the display, open Settings > Information > Bluetooth Link.
 2. Choose 2. Update over Bluetooth.
 3. Keep the display powered until it verifies and restarts.
@@ -64,7 +64,7 @@ Licence and third-party notice files are included in this ZIP.
 """
     with zipfile.ZipFile(output, "x", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         archive.write(LAUNCHER, LAUNCHER_NAME)
-        archive.write(executable, "KAJO Firmware Uploader.exe")
+        archive.write(executable, "GARDEN Firmware Uploader.exe")
         archive.write(args.manifest.resolve(), args.manifest.name)
         archive.write(release.image_path, release.image_path.name)
         archive.write(release.transport_path, release.transport_path.name)

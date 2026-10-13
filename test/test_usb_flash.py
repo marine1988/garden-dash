@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import usb_flash  # noqa: E402
 from protocol import load_release_manifest  # noqa: E402
-from test_package_kajofw import VERSION, package_usb, write_release  # noqa: E402
+from test_package_gardenfw import VERSION, package_usb, write_release  # noqa: E402
 
 
 def released_with_layout(root: Path):

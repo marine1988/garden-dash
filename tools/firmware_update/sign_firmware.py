@@ -132,7 +132,7 @@ def sign_release(firmware: Path, private_key: ec.EllipticCurvePrivateKey, versio
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Sign a KAJO-Dash firmware binary for Bluetooth upload")
+    parser = argparse.ArgumentParser(description="Sign a Garden-Dash firmware binary for Bluetooth upload")
     parser.add_argument("--firmware", type=Path, required=True)
     parser.add_argument("--private-key", type=Path, required=True)
     parser.add_argument("--version-code", type=int,

@@ -1,5 +1,5 @@
 @echo off
-rem Finds the PlatformIO CLI for the kajo.bat entries that build firmware, and
+rem Finds the PlatformIO CLI for the garden.bat entries that build firmware, and
 rem offers to install it into the project's .venv when there is none.
 rem
 rem   call "%~dp0platformio.bat"
