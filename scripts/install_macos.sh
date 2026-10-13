@@ -31,6 +31,7 @@ DIR_WAS_SET=0
 PORT=""
 DO_FLASH=1
 DO_MONITOR=0
+DO_FAKE_VESC=0
 DRY_RUN=0
 YES=0
 UPDATE=0
@@ -76,6 +77,7 @@ Options:
   --dir PATH     checkout location (default ./garden-dash)
   --repo URL     git remote to clone (default the fork)
   --no-flash     build only
+  --fake-vesc    flash a spare CYD as a fake VESC for USB testing
   --monitor      open the serial monitor at 115200 baud after flashing
   --update       fast-forward the existing checkout before building; skipped when
                  the checkout has local changes, so it never touches your work
@@ -96,6 +98,7 @@ while [ $# -gt 0 ]; do
     --repo) REPO="${2:-}"; [ -n "$REPO" ] || die "--repo needs a URL"; shift 2 ;;
     --repo=*) REPO="${1#*=}"; shift ;;
     --no-flash) DO_FLASH=0; shift ;;
+    --fake-vesc) DO_FAKE_VESC=1; shift ;;
     --monitor) DO_MONITOR=1; shift ;;
     --update) UPDATE=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
@@ -225,6 +228,32 @@ else
 fi
 
 [ "$DRY_RUN" -eq 1 ] || [ -d "$DIR" ] || die "checkout at $DIR is missing"
+
+# ── 2.5 Fake VESC (optional) ─────────────────────────────────────────────────
+
+if [ "$DO_FAKE_VESC" -eq 1 ]; then
+  step "Flashing a spare CYD as a fake VESC"
+  PIO_PY=$(pio_python)
+  if [ -z "$PIO_PY" ]; then
+    die "could not determine the Python PlatformIO runs with"
+  fi
+  FAKE_ARGS=()
+  if [ -n "$PORT" ]; then
+    FAKE_ARGS+=("$PORT")
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '    %s[dry-run]%s %s %s %s\n' "$DIM" "$RESET" "$PIO_PY" "$DIR/tools/upload_vesc_test.py" "${FAKE_ARGS[*]}"
+  else
+    ensure_python_module intelhex
+    if [ ${#FAKE_ARGS[@]} -gt 0 ]; then
+      run "$PIO_PY" "$DIR/tools/upload_vesc_test.py" "${FAKE_ARGS[@]}"
+    else
+      run "$PIO_PY" "$DIR/tools/upload_vesc_test.py"
+    fi
+  fi
+  step "Done. Select 'VESC TEST ...' on the receiver."
+  exit 0
+fi
 
 # ── 3. Serial port ───────────────────────────────────────────────────────────
 

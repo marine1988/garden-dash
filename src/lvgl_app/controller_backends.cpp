@@ -49,8 +49,8 @@ const uint32_t VESC_REPLY_TIMEOUT_MS = 100;
 // reads the active state, the task drains the request and writes the state.
 portMUX_TYPE cruiseMux = portMUX_INITIALIZER_UNLOCKED;
 volatile uint8_t cruiseRequestPending = 0;  // 0 none, 1 engage, 2 disengage
-volatile int16_t cruiseAdjustPending = 0;   // km/h nudge to apply once
 CruiseRuntime cruiseRuntime = {};
+CruiseOutcome cruiseOutcome = CRUISE_OUTCOME_NONE;  // edge, cleared as read by the UI
 
 // Profile write state, owned by the telemetry task. The UI leaves a slot number
 // and reads the last outcome; the task performs the whole read/write/verify
@@ -116,7 +116,7 @@ void resetVescSession() {
 }
 
 void vescSendPacket(const uint8_t *payload, uint8_t len) {
-  uint8_t frame[16];
+  uint8_t frame[VESC_MAX_FRAME];
   const size_t frameLen = vescBuildFrame(payload, len, frame, sizeof(frame));
   if (frameLen && vescTransport) vescTransport->write(frame, frameLen);
 }
@@ -333,6 +333,20 @@ uint8_t profileWrapCanForward(const uint8_t *payload, size_t len, uint8_t *out, 
   return (uint8_t)(len + 2u);
 }
 
+// Sends one LispBM expression the ADC application understands (engage/release
+// of the controller's native cruise). Uses the same COMM_LISP_REPL_CMD path and
+// CAN-forward wrapping as the profiles. The firmware's REPL accepts only one
+// command every 0.5 s, so an engage is a single combined expression.
+void vescCruiseSendLisp(const char *expression) {
+  if (!expression || !expression[0]) return;
+  uint8_t inner[kVescProfileLispMaxLen + 8];
+  const size_t n = vescBuildLispPayload(expression, inner, sizeof(inner));
+  if (n == 0) return;
+  uint8_t payload[sizeof(inner) + 8];
+  const uint8_t wrapped = profileWrapCanForward(inner, n, payload, sizeof(payload));
+  if (wrapped) vescSendPacket(payload, wrapped);
+}
+
 // Asks the controller for its current profile numbers and publishes them. This
 // is the "display reads from the VESC" half: the values page shows these, so it
 // reports what the controller holds, not what the display last sent.
@@ -441,13 +455,16 @@ ControllerPollResult vescBackendPoll(ControllerSample &out) {
       liveSetupValid = false;
       vescFwMajor = 0;
       vescFwMinor = 0;
-      // The link is gone, so a commanded cruise cannot be held or released:
-      // drop it to idle here. The controller's own command timeout has already
-      // released the motor, so nothing is left coasting.
+      // The link is gone, so the display can neither hold nor release a
+      // running cruise: there is no transport to send on. The ADC application
+      // keeps holding the setpoint, but the rider still owns the motor -- the
+      // throttle (a touch cancels the ADC cruise) and the brake both work
+      // locally, with no display involved. Drop the display-side state so a
+      // reconnect does not resume silently.
       portENTER_CRITICAL(&cruiseMux);
       cruiseRuntime.state = CRUISE_STATE_OFF;
       cruiseRuntime.targetKmh = 0;
-      cruiseRuntime.targetRpm = 0;
+      cruiseRuntime.rpmPerKmh = 0.0F;
       portEXIT_CRITICAL(&cruiseMux);
       // A write in flight cannot finish on a dead link: report it failed and drop
       // the step, so it does not resume mid-sequence when the link returns.
@@ -475,11 +492,14 @@ ControllerPollResult vescBackendPoll(ControllerSample &out) {
     portENTER_CRITICAL(&cruiseMux);
     cruiseRuntime.state = CRUISE_STATE_OFF;
     cruiseRuntime.targetKmh = 0;
-    cruiseRuntime.targetRpm = 0;
-    cruiseRuntime.lastCommandMs = 0;
+    cruiseRuntime.rpmPerKmh = 0.0F;
     cruiseRequestPending = 0;
-    cruiseAdjustPending = 0;
     portEXIT_CRITICAL(&cruiseMux);
+    // Re-apply the active profile on every reconnect. The controller's limits
+    // live in RAM only (conf-set, no store), so a power cycle or link drop
+    // wipes them. The rider's chosen profile must be rewritten on the new link.
+    if (activeControllerProfile != 0xFF && activeControllerProfile < kControllerProfileCount)
+      vescProfileRequestWrite(activeControllerProfile);
     Serial.println("VESC telemetry connected");
   }
   vescConnected = true;
@@ -503,12 +523,9 @@ ControllerPollResult vescBackendPoll(ControllerSample &out) {
   // exactly as the drivetrain figures above are.
   {
     uint8_t request = 0;
-    int16_t adjust = 0;
     portENTER_CRITICAL(&cruiseMux);
     request = cruiseRequestPending;
     cruiseRequestPending = 0;
-    adjust = cruiseAdjustPending;
-    cruiseAdjustPending = 0;
     portEXIT_CRITICAL(&cruiseMux);
 
     CruiseSettings settings = {};
@@ -516,13 +533,15 @@ ControllerPollResult vescBackendPoll(ControllerSample &out) {
     settings.holdTimeDeciS = cruiseHoldTimeDeciS;
     settings.minSpeedKmh = cruiseMinSpeedKmh;
     settings.maxSpeedKmh = cruiseMaxSpeedKmh;
-    settings.deadbandHundredths = cruiseDeadbandHundredths;
     settings.allowedModes = cruiseAllowedModes;
 
     CruiseInputs inputs = {};
     inputs.speedKmh = (float)out.values.speedKmh;
     inputs.rpm = vescData.rpm;
     inputs.faultCode = (uint8_t)vescData.faultCode;
+    // A regenerative current while cruising is the rider braking; the state
+    // machine reads the sign to release the cruise at once.
+    inputs.avgInputCurrent = vescData.avgInputCurrent;
     // VESC standard telemetry carries no ride mode, so the mode filter cannot
     // reject anything; cruiseModeAllowed treats 0 as "not reported".
     inputs.rideMode = 0;
@@ -531,10 +550,10 @@ ControllerPollResult vescBackendPoll(ControllerSample &out) {
 
     CruiseOutput control = {};
     portENTER_CRITICAL(&cruiseMux);
-    if (adjust != 0) cruiseControlAdjustTarget(cruiseRuntime, settings, adjust);
     control = cruiseControlStep(cruiseRuntime, settings, inputs, request == 1, request == 2, now);
+    cruiseOutcome = control.outcome;  // an edge; NONE unless something changed
     portEXIT_CRITICAL(&cruiseMux);
-    if (control.send) vescSendControl(control.command, control.value);
+    if (control.send) vescCruiseSendLisp(control.lisp);
   }
 
   // A requested profile switch, or the slow read-back that keeps the values page
@@ -553,12 +572,6 @@ void vescCruiseRequestEngage() {
 void vescCruiseRequestDisengage() {
   portENTER_CRITICAL(&cruiseMux);
   cruiseRequestPending = 2;
-  portEXIT_CRITICAL(&cruiseMux);
-}
-
-void vescCruiseAdjustTarget(int deltaKmh) {
-  portENTER_CRITICAL(&cruiseMux);
-  cruiseAdjustPending = (int16_t)deltaKmh;
   portEXIT_CRITICAL(&cruiseMux);
 }
 
@@ -584,6 +597,13 @@ bool vescCruiseActive(uint16_t &targetKmh) {
   if (active) targetKmh = cruiseRuntime.targetKmh;
   portEXIT_CRITICAL(&cruiseMux);
   return active;
+}
+
+void vescCruiseOutcome(CruiseOutcome &outcome, CruiseState &state) {
+  portENTER_CRITICAL(&cruiseMux);
+  outcome = cruiseOutcome;
+  state = cruiseRuntime.state;
+  portEXIT_CRITICAL(&cruiseMux);
 }
 
 void farDriverBackendBegin() {

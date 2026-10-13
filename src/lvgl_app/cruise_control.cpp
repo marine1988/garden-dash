@@ -2,8 +2,6 @@
 
 #include <math.h>
 
-#include "vesc_protocol.h"
-
 bool cruiseModeAllowed(const CruiseSettings &settings, uint8_t mode) {
   // A controller that reports no mode (VESC standard telemetry answers 0) must
   // not be locked out, or cruise would refuse to engage on the most common
@@ -15,28 +13,34 @@ bool cruiseModeAllowed(const CruiseSettings &settings, uint8_t mode) {
 
 CruiseOutput cruiseControlStep(CruiseRuntime &rt, const CruiseSettings &settings, const CruiseInputs &in,
                                bool requestEngage, bool requestDisengage, uint32_t nowMs) {
+  (void)nowMs;
   CruiseOutput out = {};
   out.state = rt.state;
-
-  // Hands a live cruise back explicitly: the controller coasts with no torque
-  // instead of holding its setpoint until its own command timeout expires.
-  const auto release = [&]() {
-    out.send = true;
-    out.command = VESC_COMM_SET_CURRENT;
-    out.value = kCruiseReleaseValue;
-    rt.state = CRUISE_STATE_OFF;
-    rt.targetKmh = 0;
-    rt.targetRpm = 0;
-    out.state = rt.state;
-  };
+  out.outcome = CRUISE_OUTCOME_NONE;
 
   const bool wasActive = rt.state == CRUISE_STATE_ACTIVE;
 
-  // A fault, a dead link or the rider's own cancel always wins, over a fresh
-  // engage request just as much as over a running cruise.
+  // Hands a live cruise back explicitly: the override is cleared and the ADC
+  // application takes the throttle over again, instead of the controller
+  // holding the setpoint until its own command timeout expires.
+  const auto release = [&](CruiseOutcome why) {
+    out.send = true;
+    out.lisp = kCruiseLispRelease;
+    rt.state = CRUISE_STATE_OFF;
+    rt.targetKmh = 0;
+    out.state = rt.state;
+    out.outcome = why;
+  };
+
+  // A fault, a dead link, a disabled setting or the rider's own cancel always
+  // wins, over a fresh engage request just as much as over a running cruise.
   if (!settings.enabled || requestDisengage || !in.linkLive || in.faultCode != 0) {
-    if (wasActive) release();
-    else {
+    if (wasActive) {
+      release(!settings.enabled ? CRUISE_OUTCOME_RELEASED_DISABLED
+              : requestDisengage ? CRUISE_OUTCOME_RELEASED_CANCEL
+              : !in.linkLive    ? CRUISE_OUTCOME_RELEASED_LINK
+                                : CRUISE_OUTCOME_RELEASED_FAULT);
+    } else {
       rt.state = CRUISE_STATE_OFF;
       out.state = rt.state;
     }
@@ -54,13 +58,18 @@ CruiseOutput cruiseControlStep(CruiseRuntime &rt, const CruiseSettings &settings
       rt.state = CRUISE_STATE_ACTIVE;
       rt.targetKmh = (uint16_t)lroundf(target);
       rt.rpmPerKmh = in.rpmPerKmh;
-      rt.targetRpm = (int32_t)lroundf((float)rt.targetKmh * in.rpmPerKmh);
-      rt.lastCommandMs = 0;  // force an immediate send below
-    } else {
-      rt.state = CRUISE_STATE_BLOCKED;
+      out.send = true;
+      out.lisp = kCruiseLispEngage;
       out.state = rt.state;
+      out.outcome = CRUISE_OUTCOME_ENGAGED;
       return out;
     }
+    rt.state = CRUISE_STATE_BLOCKED;
+    out.state = rt.state;
+    out.outcome = !fastEnough ? CRUISE_OUTCOME_BLOCKED_SLOW
+                  : !modeOk   ? CRUISE_OUTCOME_BLOCKED_MODE
+                              : CRUISE_OUTCOME_BLOCKED_GEARING;
+    return out;
   }
 
   if (rt.state != CRUISE_STATE_ACTIVE) {
@@ -68,32 +77,23 @@ CruiseOutput cruiseControlStep(CruiseRuntime &rt, const CruiseSettings &settings
     return out;
   }
 
-  // The rider has taken over: speed fell back under the window, which is what
-  // braking, a stop or a hill start looks like. Give the motor back.
-  if (in.speedKmh < (float)settings.minSpeedKmh) {
-    release();
+  // The rider is on the brakes: a regenerative (negative battery-side) current
+  // while cruising means braking, so give the motor back at once rather than
+  // fighting the brake with the speed loop.
+  if (in.avgInputCurrent < kCruiseBrakeRegenAmps) {
+    release(CRUISE_OUTCOME_RELEASED_BRAKE);
     return out;
   }
 
-  // Heartbeat. Re-sent even when nothing changed, because the controller
-  // releases the motor the moment these stop arriving.
-  if (rt.lastCommandMs == 0 || (uint32_t)(nowMs - rt.lastCommandMs) >= kCruiseCommandPeriodMs) {
-    out.send = true;
-    out.command = VESC_COMM_SET_RPM;
-    out.value = rt.targetRpm;
-    rt.lastCommandMs = nowMs;
+  // The rider has taken over: speed fell back under the window, which is what
+  // a stop or a hill start looks like. Give the motor back.
+  if (in.speedKmh < (float)settings.minSpeedKmh) {
+    release(CRUISE_OUTCOME_RELEASED_SPEED);
+    return out;
   }
+
+  // Nothing to send: the ADC application holds the setpoint every cycle, so
+  // there is no heartbeat to keep alive.
   out.state = rt.state;
   return out;
-}
-
-uint16_t cruiseControlAdjustTarget(CruiseRuntime &rt, const CruiseSettings &settings, int deltaKmh) {
-  if (rt.state != CRUISE_STATE_ACTIVE) return rt.targetKmh;
-  int target = (int)rt.targetKmh + deltaKmh;
-  if (target < (int)settings.minSpeedKmh) target = settings.minSpeedKmh;
-  if (target > (int)settings.maxSpeedKmh) target = settings.maxSpeedKmh;
-  rt.targetKmh = (uint16_t)target;
-  if (rt.rpmPerKmh > 0.0F) rt.targetRpm = (int32_t)lroundf((float)rt.targetKmh * rt.rpmPerKmh);
-  rt.lastCommandMs = 0;  // the new target goes out on the next step
-  return rt.targetKmh;
 }

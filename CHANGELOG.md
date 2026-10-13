@@ -20,6 +20,10 @@ the 320x240 panel -- or the generator will truncate them and say so. Entries are
 translated the way the rest of the interface is, because a changelog in six
 languages is not worth hand-maintaining.
 
+## 2026-10-13 — Cruise holds on the scooter
+
+Cruise now drives the controller's own hold over LispBM; braking releases it.
+
 ## 2026-10-13 — Garden rename
 
 The project, firmware and display are now Garden-Dash and GARDEN DASH.

@@ -408,7 +408,6 @@ extern bool cruiseControlEnabled;
 extern uint16_t cruiseHoldTimeDeciS;       // press-and-hold to engage, tenths of a second
 extern uint16_t cruiseMinSpeedKmh;
 extern uint16_t cruiseMaxSpeedKmh;
-extern uint16_t cruiseDeadbandHundredths;  // 0.01 km/h
 extern uint8_t cruiseAllowedModes;         // bit (1 << (mode-1)); 0 refuses every reported mode
 
 // Settings / state (defined in app_logic.cpp)

@@ -273,6 +273,35 @@ void testLispPayload() {
   expect(vescBuildLispPayload(expr, payload, n - 1) == 0, "lisp refuses to overflow");
 }
 
+void testProfileFrame() {
+  // A realistic LispBM profile expression (~190 chars), as built by
+  // vescProfileLisp for an Eco/Drive/Sport profile. The payload is command id
+  // + expression + NUL, ~194 bytes total — far beyond the old frame[16] buffer.
+  const char *expr =
+      "(conf-set 'l-max-erpm 4500) (conf-set 'l-current-max-scale 0.5) "
+      "(conf-set 'l-current-min-scale 0.3) (conf-set 'foc-fw-current-max 20) "
+      "(conf-set 'l-current-max 30) (conf-set 'l-in-current-max 15)";
+
+  uint8_t payload[260] = {};
+  const size_t payloadLen = vescBuildLispPayload(expr, payload, sizeof(payload));
+  expect(payloadLen > 0, "lisp payload built for profile expression");
+  expect(payloadLen == std::strlen(expr) + 2, "profile payload is id + text + NUL");
+
+  // The frame must fit in VESC_MAX_FRAME (the fix for the frame[16] bug).
+  uint8_t frame[VESC_MAX_FRAME] = {};
+  const size_t frameLen = vescBuildFrame(payload, (uint8_t)payloadLen, frame, sizeof(frame));
+  expect(frameLen == payloadLen + 5, "profile frame length is payload + 5");
+  expect(frame[0] == 2, "profile frame start byte");
+  expect(frame[1] == (uint8_t)payloadLen, "profile frame length byte");
+  expect(frame[frameLen - 1] == 3, "profile frame stop byte");
+
+  // The old 16-byte buffer must refuse the profile frame — this is the exact
+  // regression that silently dropped every profile write (GD-1 root cause).
+  uint8_t tiny[16] = {};
+  expect(vescBuildFrame(payload, (uint8_t)payloadLen, tiny, sizeof(tiny)) == 0,
+         "profile frame refuses to fit in 16 bytes (regression guard)");
+}
+
 void testParseMcconfTemp() {
   uint8_t payload[64] = {};
   payload[0] = VESC_COMM_GET_MCCONF_TEMP;
@@ -306,6 +335,7 @@ int main() {
   testControlFraming();
   testFloat32Auto();
   testLispPayload();
+  testProfileFrame();
   testParseMcconfTemp();
   if (failures == 0) printf("vesc_protocol: all checks passed\n");
   return failures == 0 ? 0 : 1;

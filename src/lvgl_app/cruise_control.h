@@ -3,19 +3,31 @@
 
 // Display-side cruise control for a VESC controller.
 //
-// The VESC's own speed PID holds the set eRPM once COMM_SET_RPM arrives, so the
-// display never runs a speed loop of its own: it decides when cruise is active
-// and what eRPM to ask for, from telemetry it already has, and re-sends the
-// command often enough that the controller's command timeout -- which releases
-// the motor -- never expires. Everything here is free of Arduino and LVGL, so
-// the host tests drive the state machine directly.
+// The VESC's ADC application owns the motor: its throttle thread rewrites the
+// motor command hundreds of times a second, so a control frame the display sends
+// at 10 Hz (COMM_SET_RPM, COMM_SET_CURRENT) is overwritten within one ADC cycle
+// and the motor never follows it. The cruise that does hold is the ADC
+// application's own: with its buttons detached and the cruise override set, the
+// app itself holds the captured eRPM every cycle. The display commands exactly
+// that over LispBM -- the same COMM_LISP_REPL_CMD path the profiles already use.
 //
-// Safety, in the order it is applied each cycle: a fault, a dead link, or the
-// rider's own cancel always disengages; the rider cannot engage below the
-// minimum speed or in a ride mode the profile does not allow; and dropping back
-// under the minimum speed (hard braking, a stop, a hill start) releases the
-// controller. The display never commands a value it cannot see a reason for, and
-// it releases rather than coasts when it stops commanding.
+// So this module decides *when* cruise is on and hands the controller the right
+// LispBM expression through a CruiseOutput; the controller's own application is
+// the holder of the setpoint. Nothing here touches Arduino or LVGL, so the host
+// tests drive the state machine directly.
+//
+// Engage sends one expression that detaches the ADC buttons (the throttle stays
+// attached) and sets the cruise override; the app then holds the speed the
+// rider had. Release clears the override and hands the throttle back untouched.
+// The two steps must travel together: the firmware's LispBM REPL accepts only
+// one command every 0.5 s, so two packets would drop the second.
+//
+// Safety, in the order it is applied each cycle: a fault, a dead link, the
+// rider's own cancel, a brake (regenerative current), or falling back under the
+// minimum speed always disengages; the rider cannot engage below the minimum
+// speed or in a ride mode the profile does not allow. The controller has no
+// command timeout to outrun because the display is no longer the writer of the
+// motor command.
 
 // Ride modes the controller can report in telemetry, 1..3, matching the three
 // configurable speed modes. 0 means the controller does not report one.
@@ -30,8 +42,7 @@ struct CruiseSettings {
   bool enabled;
   uint16_t holdTimeDeciS;       // press-and-hold to engage, tenths of a second
   uint16_t minSpeedKmh;         // below this, cruise refuses to engage
-  uint16_t maxSpeedKmh;         // ceiling the target is clamped to
-  uint16_t deadbandHundredths;  // speed error left to the controller, 0.01 km/h
+  uint16_t maxSpeedKmh;         // ceiling the captured target is clamped to
   uint8_t allowedModes;         // bit (1 << (mode-1)); 0 refuses every reported mode
 };
 
@@ -41,56 +52,69 @@ enum CruiseState : uint8_t {
   CRUISE_STATE_BLOCKED,  // an engage request was refused (too slow, mode not allowed)
 };
 
+// The outcome of the cycle, for the UI to report. It is an edge: the step
+// returns CRUISE_OUTCOME_NONE on every cycle where nothing changed, and one of
+// the others on the cycle a request is granted, refused, or a running cruise is
+// handed back.
+enum CruiseOutcome : uint8_t {
+  CRUISE_OUTCOME_NONE = 0,
+  CRUISE_OUTCOME_ENGAGED,
+  CRUISE_OUTCOME_BLOCKED_SLOW,     // refused: under the minimum speed
+  CRUISE_OUTCOME_BLOCKED_MODE,     // refused: ride mode excluded by the profile
+  CRUISE_OUTCOME_BLOCKED_GEARING,  // refused: wheel size/gearing not set
+  CRUISE_OUTCOME_RELEASED_BRAKE,   // the rider braked (regenerative current)
+  CRUISE_OUTCOME_RELEASED_SPEED,   // speed fell under the minimum
+  CRUISE_OUTCOME_RELEASED_FAULT,   // a controller fault
+  CRUISE_OUTCOME_RELEASED_LINK,    // the link went dead
+  CRUISE_OUTCOME_RELEASED_CANCEL,  // the rider cancelled
+  CRUISE_OUTCOME_RELEASED_DISABLED,
+};
+
 // What the caller should send to the controller this cycle.
 struct CruiseOutput {
-  bool send;        // true when a control command should go out
-  uint8_t command;  // a VESC_COMM_SET_* id
-  int32_t value;    // the command argument (eRPM for SET_RPM)
+  bool send;         // true when a LispBM expression should go out
+  const char *lisp;  // the expression to send (a static string), valid when send
   CruiseState state;
+  CruiseOutcome outcome;
 };
 
 // Inputs the telemetry task already has for this cycle.
 struct CruiseInputs {
-  float speedKmh;   // display-side speed, the same figure the dashboard shows
-  float rpm;        // controller eRPM, signed
-  float rpmPerKmh;  // eRPM per km/h, from the drivetrain setup; <= 0 disables engage
+  float speedKmh;         // display-side speed, the same figure the dashboard shows
+  float rpm;              // controller eRPM, signed
+  float rpmPerKmh;        // eRPM per km/h, from the drivetrain setup; <= 0 disables engage
+  float avgInputCurrent;  // battery-side current; strongly negative means braking
   uint8_t faultCode;
-  uint8_t rideMode;  // 1..3, 0 unknown
+  uint8_t rideMode;       // 1..3, 0 unknown
   bool linkLive;
 };
 
 // Runtime state, owned by the telemetry task.
 struct CruiseRuntime {
   CruiseState state;
-  uint16_t targetKmh;
-  int32_t targetRpm;
-  float rpmPerKmh;  // captured at engage so a target nudge needs no re-derivation
-  uint32_t lastCommandMs;
+  uint16_t targetKmh;  // the speed capture shown on the UI; the app holds the eRPM
+  float rpmPerKmh;     // kept for the record; not used to re-derive a setpoint
 };
+
+// The two LispBM expressions the VESC ADC application understands. Engage keeps
+// the throttle attached (mode 2 detaches the buttons only) so the rider can
+// still brake with it after a release.
+constexpr const char *kCruiseLispEngage = "(progn (app-adc-detach 2 1) (app-adc-override 3 1))";
+constexpr const char *kCruiseLispRelease = "(app-adc-override 3 0)";
+
+// Battery-side current at or below this while cruising is read as the rider
+// braking regeneratively, and releases the cruise at once. The value is
+// deliberately conservative: a downhill coast can feed a little back, but a
+// real brake pulls several amps.
+constexpr float kCruiseBrakeRegenAmps = -5.0F;
 
 // Applies one cycle and returns what, if anything, to send. `requestEngage` is
 // true on the cycle the rider asked to engage, `requestDisengage` on the one
-// they asked to stop. Called every telemetry poll; the heartbeat period is
-// enforced inside.
+// they asked to stop. Called every telemetry poll.
 CruiseOutput cruiseControlStep(CruiseRuntime &rt, const CruiseSettings &settings, const CruiseInputs &in,
                                bool requestEngage, bool requestDisengage, uint32_t nowMs);
-
-// Nudges the active target by `deltaKmh`, clamped to the settings window, and
-// returns the new target in km/h. Returns the unchanged target when cruise is
-// not active.
-uint16_t cruiseControlAdjustTarget(CruiseRuntime &rt, const CruiseSettings &settings, int deltaKmh);
 
 // True when the reported ride mode is allowed by the settings. An unknown mode
 // (0) or a mask of 0 does not block: the display only refuses a mode the rider
 // explicitly excluded.
 bool cruiseModeAllowed(const CruiseSettings &settings, uint8_t mode);
-
-// How often the command must be re-sent to stay inside the controller's command
-// timeout. 20 Hz is comfortably inside the 1 s default while leaving the poll
-// loop free for telemetry.
-constexpr uint32_t kCruiseCommandPeriodMs = 50;
-
-// The argument ZERO for a release: COMM_SET_CURRENT 0 A leaves the motor
-// coasting with no torque, which is the safe way to hand control back the
-// instant cruise is cancelled rather than waiting out the controller's timeout.
-constexpr int32_t kCruiseReleaseValue = 0;

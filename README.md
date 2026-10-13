@@ -166,10 +166,13 @@ screens, not a mock-up. Task layout, data flow and threading rules are in
 ## Safety
 
 The firmware displays and records telemetry. It also offers a display-side cruise
-control, which holds the current speed by sending the VESC's own `COMM_SET_RPM`
-setpoint: engage it with a deliberate hold, and it releases on a tap, on braking
-below the configured minimum, on a controller fault, or when the link drops.
-Controller profiles go further and set the controller's live speed and current
+control. On a VESC it drives the controller's own cruise — the ADC application's
+hold — over LispBM, so the setpoint survives the throttle application that would
+overwrite a plain `COMM_SET_RPM` frame. Engage it with a deliberate hold after
+releasing the throttle; it releases on a tap, on braking (regenerative current),
+on falling below the configured minimum speed, on a controller fault, or when
+the link drops. It needs the ADC application's "Cruise control button" enabled in
+VESC Tool. Controller profiles go further and set the controller's live speed and current
 limits -- forward and reverse speed, acceleration and braking scales, field
 weakening, and the motor and battery current ceilings -- through a LispBM
 `conf-set` expression, then read them back to confirm. `conf-set` changes only

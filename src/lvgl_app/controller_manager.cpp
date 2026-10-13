@@ -716,18 +716,26 @@ void controllerCruiseEngage() {
 void controllerCruiseDisengage() {
   if (controllerSupportsCruise()) vescCruiseRequestDisengage();
 }
-void controllerCruiseAdjustTarget(int deltaKmh) {
-  if (controllerSupportsCruise()) vescCruiseAdjustTarget(deltaKmh);
-}
 bool controllerCruiseActive(uint16_t &targetKmh) {
   if (!controllerSupportsCruise()) return false;
   return vescCruiseActive(targetKmh);
 }
+void controllerCruiseOutcome(CruiseOutcome &outcome, CruiseState &state) {
+  if (!controllerSupportsCruise()) {
+    outcome = CRUISE_OUTCOME_NONE;
+    state = CRUISE_STATE_OFF;
+    return;
+  }
+  vescCruiseOutcome(outcome, state);
+}
 #else
 void controllerCruiseEngage() {}
 void controllerCruiseDisengage() {}
-void controllerCruiseAdjustTarget(int) {}
 bool controllerCruiseActive(uint16_t &) { return false; }
+void controllerCruiseOutcome(CruiseOutcome &outcome, CruiseState &state) {
+  outcome = CRUISE_OUTCOME_NONE;
+  state = CRUISE_STATE_OFF;
+}
 #endif
 
 // Controller profiles. The capability comes from the active backend's caps, so

@@ -87,7 +87,6 @@ bool cruiseControlEnabled = false;
 uint16_t cruiseHoldTimeDeciS = 50;
 uint16_t cruiseMinSpeedKmh = 5;
 uint16_t cruiseMaxSpeedKmh = 25;
-uint16_t cruiseDeadbandHundredths = 2;
 uint8_t cruiseAllowedModes = (1u << 0) | (1u << 1);
 
 ControllerProfile controllerProfiles[kControllerProfileCount] = {};
@@ -1386,7 +1385,6 @@ struct AppSettingsSnapshot {
   uint16_t cruiseHoldTimeDeciS;
   uint16_t cruiseMinSpeedKmh;
   uint16_t cruiseMaxSpeedKmh;
-  uint16_t cruiseDeadbandHundredths;
   uint8_t cruiseAllowedModes;
   uint8_t activeProfile;
   DashboardCustomization profiles[MODE_COUNT];
@@ -1543,7 +1541,6 @@ static AppSettingsSnapshot currentAppSettingsSnapshot() {
   snapshot.cruiseHoldTimeDeciS = cruiseHoldTimeDeciS;
   snapshot.cruiseMinSpeedKmh = cruiseMinSpeedKmh;
   snapshot.cruiseMaxSpeedKmh = cruiseMaxSpeedKmh;
-  snapshot.cruiseDeadbandHundredths = cruiseDeadbandHundredths;
   snapshot.cruiseAllowedModes = cruiseAllowedModes;
   snapshot.activeProfile = activeControllerProfile;
   memcpy(snapshot.profiles, dashboardCustomizations, sizeof(snapshot.profiles));
@@ -1633,7 +1630,6 @@ void saveAppSettings() {
   PUT_CHANGED(cruiseHoldTimeDeciS, putUShort("cruiseHold", current.cruiseHoldTimeDeciS));
   PUT_CHANGED(cruiseMinSpeedKmh, putUShort("cruiseMin", current.cruiseMinSpeedKmh));
   PUT_CHANGED(cruiseMaxSpeedKmh, putUShort("cruiseMax", current.cruiseMaxSpeedKmh));
-  PUT_CHANGED(cruiseDeadbandHundredths, putUShort("cruiseDead", current.cruiseDeadbandHundredths));
   PUT_CHANGED(cruiseAllowedModes, putUChar("cruiseModes", current.cruiseAllowedModes));
   PUT_CHANGED(activeProfile, putUChar("activeProf", current.activeProfile));
 #undef PUT_CHANGED
@@ -1769,7 +1765,6 @@ static void setDefaultAppSettings() {
   cruiseHoldTimeDeciS = 50;
   cruiseMinSpeedKmh = 5;
   cruiseMaxSpeedKmh = 25;
-  cruiseDeadbandHundredths = 2;
   cruiseAllowedModes = (1u << 0) | (1u << 1);
   setDefaultControllerProfiles();
   applyDashboardCustomization(dashboardMode);
@@ -1920,7 +1915,6 @@ void loadAppSettings() {
   cruiseHoldTimeDeciS = constrain(preferences.getUShort("cruiseHold", cruiseHoldTimeDeciS), 1, 100);
   cruiseMinSpeedKmh = constrain(preferences.getUShort("cruiseMin", cruiseMinSpeedKmh), 0, 500);
   cruiseMaxSpeedKmh = constrain(preferences.getUShort("cruiseMax", cruiseMaxSpeedKmh), 0, 500);
-  cruiseDeadbandHundredths = constrain(preferences.getUShort("cruiseDead", cruiseDeadbandHundredths), 0, 500);
   cruiseAllowedModes = preferences.getUChar("cruiseModes", cruiseAllowedModes) & 0x07;
   // A stored window that lost its order is repaired rather than trusted: cruise
   // would otherwise refuse every engage because the floor sits above the ceiling.

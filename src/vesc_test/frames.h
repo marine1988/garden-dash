@@ -9,7 +9,7 @@
 // would agree with it even if both were wrong.
 namespace fake_vesc {
 
-enum : uint8_t { kCommandFwVersion = 0, kCommandGetValues = 4, kCommandForwardCan = 34, kCommandGetValuesSetup = 47 };
+enum : uint8_t { kCommandFwVersion = 0, kCommandGetValues = 4, kCommandForwardCan = 34, kCommandGetValuesSetup = 47, kCommandLispReplCmd = 138 };
 
 // Instantaneous readings. Everything cumulative (charge, energy, distance,
 // tachometer) lives in Totals, because a real controller counts those up and
@@ -152,6 +152,18 @@ inline size_t makeFwVersionFrame(uint8_t *out, size_t capacity, uint8_t major = 
   payload[i++] = major;
   payload[i++] = minor;
   for (const char *name = "GARDEN-TEST"; *name; name++) payload[i++] = uint8_t(*name);
+  payload[i++] = 0;
+  return frame(payload, i, out, capacity);
+}
+
+// Simulates the LispBM REPL answer. The controller evaluates the expression and
+// sends back a short reply: "OK" for a successful conf-set/progn block, or a
+// short error string. The receiver uses this to confirm a profile write landed.
+inline size_t makeLispReplyFrame(uint8_t *out, size_t capacity, const char *reply) {
+  uint8_t payload[32];
+  size_t i = 0;
+  payload[i++] = kCommandLispReplCmd;
+  for (const char *p = reply; *p; p++) payload[i++] = uint8_t(*p);
   payload[i++] = 0;
   return frame(payload, i, out, capacity);
 }

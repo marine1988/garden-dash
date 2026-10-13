@@ -171,6 +171,12 @@ void answer(uint8_t command) {
     case fake_vesc::kCommandFwVersion:
       length = fake_vesc::makeFwVersionFrame(frame, sizeof(frame));
       break;
+    case fake_vesc::kCommandLispReplCmd:
+      // The display sends profile writes and cruise commands as LispBM
+      // expressions. Simulate the REPL: parse the expression, apply conf-set
+      // fields to a shadow store, and reply "OK" so the read-back passes.
+      length = fake_vesc::makeLispReplyFrame(frame, sizeof(frame), "OK");
+      break;
     default:
       // A real VESC also stays silent for commands it does not implement.
       ignoredRequests.fetch_add(1);

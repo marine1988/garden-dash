@@ -46,6 +46,12 @@ enum : uint8_t {
 // four-byte argument a SET_* command carries.
 enum : size_t { VESC_MAX_COMMAND_FRAME = 16 };
 
+// Longest frame vescSendPacket must carry: CAN-forward prefix (2) + command id
+// (1) + Lisp payload (id + up to kVescProfileLispMaxLen expression + NUL) +
+// framing overhead (5). A LispBM profile expression needs ~200 bytes, so the
+// old frame[16] buffer silently dropped every profile write.
+enum : size_t { VESC_MAX_FRAME = 265 };
+
 // The COMM_GET_VALUES fields this firmware consumes. The packet carries more
 // (avg_id, avg_iq, pid position, controller id); they are skipped
 // in place rather than stored.

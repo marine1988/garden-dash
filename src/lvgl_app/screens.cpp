@@ -96,8 +96,15 @@ enum StatusNotice : uint8_t {
   NOTICE_CRUISE_CANCELLED,
   NOTICE_CRUISE_HOLD,
   NOTICE_CRUISE_UNAVAILABLE,
+  NOTICE_CRUISE_DISABLED,
+  NOTICE_CRUISE_TOO_SLOW,
+  NOTICE_CRUISE_MODE_BLOCKED,
+  NOTICE_CRUISE_GEARING,
+  NOTICE_CRUISE_BRAKE,
   NOTICE_PROFILE_APPLIED,
   NOTICE_PROFILE_CLEARED,
+  NOTICE_PROFILE_WRITE_CONFIRMED,
+  NOTICE_PROFILE_WRITE_FAILED,
 };
 
 static StatusNotice pendingStatusNotice = NOTICE_NONE;
@@ -109,6 +116,7 @@ static lv_timer_t *statusToastTimer = NULL;
 static bool statusToastLeaving = false;
 static void showStatusNotice(StatusNotice notice);
 static void showPendingStatusNotice();
+static void observeCruiseState();
 static void serviceRecoveryHold();
 static void showPendingRecoveryPrompt();
 static void queueStatusNotice(StatusNotice notice) {
@@ -326,7 +334,6 @@ enum TextInputContext {
 // fields, so they do not go through vehicleFieldTitle/saveVehicleInputValue.
 enum CruiseTextField {
   CRUISE_FIELD_HOLD = 0,
-  CRUISE_FIELD_DEADBAND,
   CRUISE_FIELD_MIN_SPEED,
   CRUISE_FIELD_MAX_SPEED,
   CRUISE_FIELD_COUNT,
@@ -343,7 +350,6 @@ static int profileTextField = -1;
 enum CruiseOption {
   kCruiseOptEnable = 0,
   kCruiseOptHold,
-  kCruiseOptDeadband,
   kCruiseOptMinSpeed,
   kCruiseOptMaxSpeed,
   kCruiseOptModeEco,
@@ -1552,6 +1558,33 @@ static void observeRideLoggingNotices() {
   deliverLoggingNotice(notice);
 }
 
+// Observes the profile write report and shows a toast when the outcome changes.
+// CONFIRMED means the controller's read-back matches the target; FAILED means
+// the link refused, timed out, or the reply disagreed.
+static VescProfileWriteReport lastProfileWriteReport = {VESC_PROFILE_WRITE_IDLE, 0xFF};
+static bool profileWriteReportKnown = false;
+
+static void observeProfileWriteNotices() {
+  const VescProfileWriteReport report = controllerProfileWriteReport();
+  if (!profileWriteReportKnown) {
+    lastProfileWriteReport = report;
+    profileWriteReportKnown = true;
+    return;
+  }
+
+  StatusNotice notice = NOTICE_NONE;
+  if (report.status == VESC_PROFILE_WRITE_CONFIRMED &&
+      lastProfileWriteReport.status != VESC_PROFILE_WRITE_CONFIRMED) {
+    notice = NOTICE_PROFILE_WRITE_CONFIRMED;
+  } else if (report.status == VESC_PROFILE_WRITE_FAILED &&
+             lastProfileWriteReport.status != VESC_PROFILE_WRITE_FAILED) {
+    notice = NOTICE_PROFILE_WRITE_FAILED;
+  }
+
+  lastProfileWriteReport = report;
+  if (notice != NOTICE_NONE) deliverLoggingNotice(notice);
+}
+
 void uiDashboardTick() {
   // The first real telemetry since a reset: from here on a missing link means
   // the controller is off, not unconfigured. Saved here because the UI thread
@@ -1571,6 +1604,8 @@ void uiDashboardTick() {
     if (strcmp(lv_label_get_text(rideModeReadout), name)) lv_label_set_text(rideModeReadout, name);
   }
   observeRideLoggingNotices();
+  observeProfileWriteNotices();
+  observeCruiseState();
   serviceRecoveryHold();
   // Any way out of the controller wizard -- BACK, apply, or the automatic
   // return to the dashboard -- hands the radio back to the configured backend.
@@ -2364,6 +2399,21 @@ static const char *statusNoticeText(StatusNotice notice) {
       return txt("CRUISE NEEDS A VESC LINK", "VAKIONOPEUS VAATII VESC-YHTEYDEN",
                  "TEMPOMAT BRAUCHT VESC-LINK", "RÉGULATEUR : LIEN VESC REQUIS",
                  "CONTROL CRUCERO: SE REQUIERE VESC", "CRUISE: SERVE COLLEGAMENTO VESC");
+    case NOTICE_CRUISE_DISABLED:
+      return txt("CRUISE IS TURNED OFF", "VAKIONOPEUS ON POIS", "TEMPOMAT IST AUS",
+                 "RÉGULATEUR DÉSACTIVÉ", "CONTROL CRUCERO DESACTIVADO", "CRUISE DISATTIVATO");
+    case NOTICE_CRUISE_TOO_SLOW:
+      return txt("RIDE FASTER TO CRUISE", "AJA NOPEAMMIN", "SCHNELLER FAHREN",
+                 "ROULEZ PLUS VITE", "VE MÁS RÁPIDO", "VAI PIÙ VELOCE");
+    case NOTICE_CRUISE_MODE_BLOCKED:
+      return txt("CRUISE OFF IN THIS MODE", "VAKIONOPEUS EI TÄSSÄ TILASSA", "TEMPOMAT IN DIESEM MODUS AUS",
+                 "RÉGULATEUR HORS DE CE MODE", "CRUCERO NO EN ESTE MODO", "CRUISE OFF IN QUESTA MODALITÀ");
+    case NOTICE_CRUISE_GEARING:
+      return txt("SET WHEEL SIZE FIRST", "ASETA RENKAAN KOKO ENSIN", "ERST RADDURCHMESSER SETZEN",
+                 "RÉGLEZ D'ABORD LA ROUE", "FIJA ANTES LA RUEDA", "IMPOSTA PRIMA LA RUOTA");
+    case NOTICE_CRUISE_BRAKE:
+      return txt("CRUISE OFF — BRAKE", "VAKIONOPEUS POIS — JARRU", "TEMPOMAT AUS — BREMSE",
+                 "RÉGULATEUR OFF — FREIN", "CRUCERO OFF — FRENO", "CRUISE OFF — FRENO");
     case NOTICE_PROFILE_APPLIED:
       // The write is confirmed by the read-back on the page, so the toast reports
       // what the display has done, not what the controller is assumed to have
@@ -2373,6 +2423,12 @@ static const char *statusNoticeText(StatusNotice notice) {
     case NOTICE_PROFILE_CLEARED:
       return txt("PROFILE RESET", "PROFIILI PALAUTETTU", "PROFIL ZURÜCKGESETZT", "PROFIL RÉINITIALISÉ",
                  "PERFIL RESTAURADO", "PROFILO RIPRISTINATO");
+    case NOTICE_PROFILE_WRITE_CONFIRMED:
+      return txt("PROFILE CONFIRMED", "PROFIILI VAHVISTETTU", "PROFIL BESTÄTIGT", "PROFIL CONFIRMÉ",
+                 "PERFIL CONFIRMADO", "PROFILO CONFERMATO");
+    case NOTICE_PROFILE_WRITE_FAILED:
+      return txt("PROFILE WRITE FAILED", "PROFIILIEN KIRJOITUS EPÄONNISTUI", "PROFIL-SCHREIBEN FEHLGESCHLAGEN",
+                 "ÉCRITURE PROFIL ÉCHOUEE", "ESCRITURA DE PERFIL FALLÓ", "SCRITTURA PROFILO FALLITA");
     default:
       return "";
   }
@@ -2382,7 +2438,7 @@ static bool statusNoticeIsWarning(StatusNotice notice) {
   return notice == NOTICE_SD_CARD_REMOVED || notice == NOTICE_SD_CARD_REMOVED_RECORDING ||
          notice == NOTICE_SD_WRITE_FAILED || notice == NOTICE_SD_CARD_NOT_READY ||
          notice == NOTICE_VESC_OFFLINE_SAVED || notice == NOTICE_RESTART_DISPLAY_TO_APPLY ||
-         notice == NOTICE_LIGHT_SENSOR_RANGE_TOO_SMALL;
+         notice == NOTICE_LIGHT_SENSOR_RANGE_TOO_SMALL || notice == NOTICE_PROFILE_WRITE_FAILED;
 }
 
 static void statusToastDeleteCb(lv_event_t *) {
@@ -2884,10 +2940,17 @@ static void developerDisplayButtonEventCb(lv_event_t *e) {
 // Engaging holds the button for the configured hold time, so a passing touch
 // cannot take over the throttle. Cancelling is a plain tap and never waits: a
 // rider reaching for the brake must be able to hand control back at once.
+//
+// The button also mirrors the live state: observeCruiseState(), driven by the
+// dashboard tick, rebuilds the cruise page when the state changes, so a running
+// cruise reads CANCEL without the rider touching anything. The rebuild happens
+// on the tick, well outside the engaging press, so it cannot swallow the tap.
 static lv_obj_t *cruiseEngageButton = NULL;
 static lv_timer_t *cruiseHoldTimer = NULL;
 static uint32_t cruiseHoldStartedMs = 0;
 static bool cruiseHoldTriggered = false;
+static bool cruiseStateKnown = false;
+static bool cruiseReportedActive = false;
 
 static void stopCruiseHoldTimer() {
   if (!cruiseHoldTimer) return;
@@ -2910,11 +2973,19 @@ static void cruiseHoldTimerCb(lv_timer_t *timer) {
   lv_timer_del(timer);
   if (!controllerSupportsCruise()) {
     queueStatusNotice(NOTICE_CRUISE_UNAVAILABLE);
+  } else if (!cruiseControlEnabled) {
+    // The engage path used to toast success with cruise switched off, so the
+    // rider saw "CRUISE ENGAGED" for a no-op. Say what is actually wrong.
+    queueStatusNotice(NOTICE_CRUISE_DISABLED);
   } else {
+    // The outcome (engaged, or the reason it was refused) is reported by
+    // observeCruiseState() once the telemetry poll has applied the request, so
+    // the toast reflects the controller, not the intention.
     controllerCruiseEngage();
-    queueStatusNotice(NOTICE_CRUISE_ENGAGED);
   }
-  queueRebuild(SCREEN_SUBMENU);
+  // No rebuild here: rebuilding between this timer and the touch release used to
+  // destroy the button under the finger and swallow the next tap. The label is
+  // kept in step by observeCruiseState() instead.
 }
 
 static void cruiseEngageEventCb(lv_event_t *e) {
@@ -2922,12 +2993,20 @@ static void cruiseEngageEventCb(lv_event_t *e) {
   lv_obj_t *button = lv_event_get_target(e);
   if (code == LV_EVENT_DELETE) {
     stopCruiseHoldTimer();
-    cruiseEngageButton = NULL;
+    // Only forget the button if the one being deleted is the one we track. A
+    // screen rebuild deletes the old button after the new one has already
+    // registered, and clearing here would drop the new pointer.
+    if (button == cruiseEngageButton) cruiseEngageButton = NULL;
     return;
   }
   if (code == LV_EVENT_PRESSED) {
     uint16_t activeTarget = 0;
-    if (controllerCruiseActive(activeTarget)) return;  // a tap cancels, below
+    if (controllerCruiseActive(activeTarget)) {
+      // A cancel tap while engaged. Clear any stale hold flag so the CLICKED
+      // that follows cancels instead of being swallowed.
+      cruiseHoldTriggered = false;
+      return;
+    }
     cruiseEngageButton = button;
     cruiseHoldTriggered = false;
     cruiseHoldStartedMs = millis();
@@ -2954,6 +3033,39 @@ static void cruiseEngageEventCb(lv_event_t *e) {
   }
   // A tap too short to engage: say so rather than doing nothing.
   queueStatusNotice(NOTICE_CRUISE_HOLD);
+}
+
+// Reports the cruise state machine's outcome as a toast, and rebuilds the
+// cruise page when the live state changes so the engage button reads CANCEL
+// while cruise runs. Driven by the dashboard tick (100 ms) and the telemetry
+// poll (100 ms), so a request is reflected within about one tick.
+static void observeCruiseState() {
+  CruiseOutcome outcome = CRUISE_OUTCOME_NONE;
+  CruiseState state = CRUISE_STATE_OFF;
+  controllerCruiseOutcome(outcome, state);
+
+  StatusNotice notice = NOTICE_NONE;
+  switch (outcome) {
+    case CRUISE_OUTCOME_ENGAGED: notice = NOTICE_CRUISE_ENGAGED; break;
+    case CRUISE_OUTCOME_BLOCKED_SLOW: notice = NOTICE_CRUISE_TOO_SLOW; break;
+    case CRUISE_OUTCOME_BLOCKED_MODE: notice = NOTICE_CRUISE_MODE_BLOCKED; break;
+    case CRUISE_OUTCOME_BLOCKED_GEARING: notice = NOTICE_CRUISE_GEARING; break;
+    case CRUISE_OUTCOME_RELEASED_BRAKE: notice = NOTICE_CRUISE_BRAKE; break;
+    case CRUISE_OUTCOME_RELEASED_CANCEL: notice = NOTICE_CRUISE_CANCELLED; break;
+    default: break;  // fault / link / speed / disabled: the dashboard shows those
+  }
+  if (notice != NOTICE_NONE) deliverLoggingNotice(notice);
+
+  const bool active = state == CRUISE_STATE_ACTIVE;
+  if (!cruiseStateKnown) {
+    cruiseStateKnown = true;
+    cruiseReportedActive = active;
+    return;
+  }
+  if (active == cruiseReportedActive) return;
+  cruiseReportedActive = active;
+  if (currentScreen == SCREEN_SUBMENU && submenuType == SUBMENU_CRUISE && !rebuildQueued)
+    queueLowMemoryRebuild(SCREEN_SUBMENU);
 }
 
 static lv_obj_t *makeMenuTopBar(lv_obj_t *scr, const char *title, uint8_t pageNumber, uint8_t pageCount,
@@ -4802,11 +4914,6 @@ static void submenuAction(int id) {
           textInputContext = INPUT_CRUISE_VALUE;
           queueRebuild(SCREEN_TEXT_INPUT);
           return;
-        case kCruiseOptDeadband:
-          cruiseTextField = CRUISE_FIELD_DEADBAND;
-          textInputContext = INPUT_CRUISE_VALUE;
-          queueRebuild(SCREEN_TEXT_INPUT);
-          return;
         case kCruiseOptMinSpeed:
           cruiseTextField = CRUISE_FIELD_MIN_SPEED;
           textInputContext = INPUT_CRUISE_VALUE;
@@ -6120,13 +6227,9 @@ static void showSubmenu() {
                                           : txt("Disabled", "Pois", "Aus", "Désactivé", "Desactivado", "Disattivo"),
                      cruiseControlEnabled, BTN_OPTION_BASE + kCruiseOptEnable);
       snprintf(value, sizeof(value), "%.1f s", cruiseHoldTimeDeciS / 10.0F);
-      makeMenuButton(scr, kMenuEdgeX, 102, kTwoColLeftW, 52,
+      makeMenuButton(scr, kMenuEdgeX, 102, kMenuContentW, 52,
                      txt("HOLD TIME", "PITOAIKA", "HALTEZEIT", "MAINTIEN", "MANTENER", "TENUTA"), value, false,
                      BTN_OPTION_BASE + kCruiseOptHold);
-      snprintf(value, sizeof(value), "%.2f km/h", cruiseDeadbandHundredths / 100.0F);
-      makeMenuButton(scr, kTwoColRightX, 102, kTwoColRightW, 52,
-                     txt("DEADBAND", "KUOLLUT ALUE", "TOTZONE", "ZONE MORTE", "ZONA MUERTA", "BANDA MORTA"), value,
-                     false, BTN_OPTION_BASE + kCruiseOptDeadband);
       snprintf(value, sizeof(value), "%u km/h", cruiseMinSpeedKmh);
       makeMenuButton(scr, kMenuEdgeX, 160, kTwoColLeftW, 52,
                      txt("MIN SPEED", "MIN NOPEUS", "MIN-TEMPO", "VITESSE MIN", "VEL. MÍNIMA", "VEL. MINIMA"), value,
@@ -6161,11 +6264,15 @@ static void showSubmenu() {
       if (supported) {
         lv_obj_remove_event_cb(engage, buttonEventCb);
         lv_obj_add_event_cb(engage, cruiseEngageEventCb, LV_EVENT_ALL, NULL);
+        // Track the live button so its delete callback knows whether it is the
+        // one being torn down by a rebuild, and observeCruiseState can tell the
+        // rider the state machine's outcome.
+        cruiseEngageButton = engage;
       }
       makeExplanationAt(
           scr, 172,
           active ? txt("Tap to cancel. Braking or a fault releases it too.", "Peruuta napauttamalla. Jarrutus tai vika vapauttaa myös.", "Zum Abbrechen tippen. Bremsen oder Fehler löst ebenfalls.", "Touchez pour annuler. Freinage ou défaut libère aussi.", "Toca para cancelar. Frenar o un fallo también lo libera.", "Tocca per annullare. Frenata o guasto lo rilasciano.")
-                 : txt("Hold the button to engage.", "Pidä painiketta pohjassa käyttääksesi.", "Zum Aktivieren halten.", "Maintenez le bouton pour activer.", "Mantén pulsado para activar.", "Tieni premuto per attivare."));
+                 : txt("Release the throttle, then hold to engage.", "Päästä kaasusta ja pidä painiketta.", "Gas loslassen, dann Knopf halten.", "Lâchez l'accélérateur, puis maintenez.", "Suelta el acelerador y mantén pulsado.", "Rilascia l'acceleratore, poi tieni premuto."));
     }
     loadScreen(scr); return;
   }
@@ -7914,9 +8021,6 @@ static void finishTextEdit(bool save) {
       case CRUISE_FIELD_HOLD:
         cruiseHoldTimeDeciS = (uint16_t)constrain((int)lroundf(entered * 10.0F), 1, 100);
         break;
-      case CRUISE_FIELD_DEADBAND:
-        cruiseDeadbandHundredths = (uint16_t)constrain((int)lroundf(entered * 100.0F), 0, 500);
-        break;
       case CRUISE_FIELD_MIN_SPEED:
         cruiseMinSpeedKmh = (uint16_t)constrain((int)lroundf(entered), 0, 500);
         if (cruiseMaxSpeedKmh < cruiseMinSpeedKmh) cruiseMaxSpeedKmh = cruiseMinSpeedKmh;
@@ -8162,15 +8266,6 @@ static void showTextInput() {
                    "Segundos que se mantiene el botón (0,1 - 10,0)",
                    "Secondi di tenuta del pulsante (0,1 - 10,0)");
         break;
-      case CRUISE_FIELD_DEADBAND:
-        title = txt("DEADBAND", "KUOLLUT ALUE", "TOTZONE", "ZONE MORTE", "ZONA MUERTA", "BANDA MORTA");
-        hint = txt("Speed error left to the controller, 0.00 - 5.00 km/h",
-                   "Ohjaimelle jäävä nopeusvirhe, 0.00 - 5.00 km/h",
-                   "Dem Controller überlassene Regelabweichung, 0,00 - 5,00 km/h",
-                   "Écart de vitesse laissé au contrôleur, 0,00 - 5,00 km/h",
-                   "Error de velocidad para el controlador, 0,00 - 5,00 km/h",
-                   "Errore di velocità lasciato al controller, 0,00 - 5,00 km/h");
-        break;
       case CRUISE_FIELD_MIN_SPEED:
         title = txt("MIN SPEED", "MIN NOPEUS", "MIN-TEMPO", "VITESSE MIN", "VEL. MÍNIMA", "VEL. MINIMA");
         hint = txt("Cruise will not engage below this (0 - 500 km/h)",
@@ -8240,7 +8335,6 @@ static void showTextInput() {
   } else if (textInputContext == INPUT_CRUISE_VALUE) {
     switch (cruiseTextField) {
       case CRUISE_FIELD_HOLD: snprintf(current, sizeof(current), "%.1f", cruiseHoldTimeDeciS / 10.0F); break;
-      case CRUISE_FIELD_DEADBAND: snprintf(current, sizeof(current), "%.2f", cruiseDeadbandHundredths / 100.0F); break;
       case CRUISE_FIELD_MIN_SPEED: snprintf(current, sizeof(current), "%u", cruiseMinSpeedKmh); break;
       case CRUISE_FIELD_MAX_SPEED:
       default: snprintf(current, sizeof(current), "%u", cruiseMaxSpeedKmh); break;

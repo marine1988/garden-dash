@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_state.h"
+#include "cruise_control.h"  // CruiseOutcome, CruiseState
 #include "vesc_profile.h"  // VescProfileWriteReport
 
 constexpr uint8_t CONTROLLER_LINK_MAX_DEVICES = 12;
@@ -261,10 +262,12 @@ ControllerSnapshot controllerSnapshot();
 bool controllerSupportsCruise();
 void controllerCruiseEngage();
 void controllerCruiseDisengage();
-// Nudges the active target by `deltaKmh`, clamped to the configured window.
-void controllerCruiseAdjustTarget(int deltaKmh);
 // False when cruise is idle. `targetKmh` is written only while active.
 bool controllerCruiseActive(uint16_t &targetKmh);
+// The last outcome the state machine produced, and the state it left cruise in.
+// An edge: the UI compares against the value it saw before, so a message is
+// shown once per transition.
+void controllerCruiseOutcome(CruiseOutcome &outcome, CruiseState &state);
 
 // Controller profiles written to the link. `controllerSupportsProfileWrite()` is
 // false on a FarDriver link and on the host preview, where the write is a no-op.
