@@ -97,7 +97,6 @@ enum StatusNotice : uint8_t {
   NOTICE_CRUISE_HOLD,
   NOTICE_CRUISE_UNAVAILABLE,
   NOTICE_PROFILE_APPLIED,
-  NOTICE_PROFILE_SAVED,
   NOTICE_PROFILE_CLEARED,
 };
 
@@ -356,72 +355,50 @@ enum CruiseOption {
 // the values page carries real field ids, plus one id of its own for the cruise
 // ceiling (which is not a vehicle field). 40 is clear of the field id space,
 // which ends at SPEED_FIELD_BASE + SPEED_FIELD_COUNT.
-constexpr int kProfileOptSave = kControllerProfileCount;
-constexpr int kProfileOptClear = kControllerProfileCount + 1;
-constexpr int kProfileOptApply = kControllerProfileCount + 2;
+constexpr int kProfileOptApply = kControllerProfileCount;
+constexpr int kProfileOptReset = kControllerProfileCount + 1;
 
-// The profile pages carry their own option ids. The slots are 0..2, the manage
-// actions follow, and each values page has its own base so a slot number can
-// never be read as a field. The bases sit well clear of the vehicle-field id
-// space (which ends at SPEED_FIELD_BASE + SPEED_FIELD_COUNT) so no id can mean
-// two things.
-constexpr int kProfileFieldVescBase = 80;   // + ProfileVescField
-constexpr int kProfileFieldExtraBase = 90;  // + ProfileExtraField
+// The values page carries one option id per field, based well clear of the
+// vehicle-field id space (which ends at SPEED_FIELD_BASE + SPEED_FIELD_COUNT) so
+// a slot number and a field can never be confused.
+constexpr int kProfileFieldBase = 80;  // + ProfileField
 
-// The controller limits a profile writes to a VESC, in VESC Tool's own order:
-// the two speed limits, then the drive and brake current scales, then the
-// field-weakening current the scooter-support package writes alongside them.
-enum ProfileVescField : uint8_t {
-  PROFILE_VESC_FORWARD = 0,
-  PROFILE_VESC_REVERSE,
-  PROFILE_VESC_MOTOR_SCALE,
-  PROFILE_VESC_BRAKE_SCALE,
-  PROFILE_VESC_FIELD_WEAKENING,
-  PROFILE_VESC_FIELD_COUNT,
+// Everything a profile stores, and everything it writes to the controller. The
+// order is the order the rider reads them in: the two speed limits, then the two
+// current scales, then the three absolute currents.
+enum ProfileField : uint8_t {
+  PROFILE_FIELD_MAX_SPEED = 0,
+  PROFILE_FIELD_REVERSE_SPEED,
+  PROFILE_FIELD_ACCEL,
+  PROFILE_FIELD_BRAKE,
+  PROFILE_FIELD_FIELD_WEAKENING,
+  PROFILE_FIELD_MOTOR_AMPS,
+  PROFILE_FIELD_BATTERY_AMPS,
+  PROFILE_FIELD_COUNT,
 };
 
-// The extras a profile keeps on the display, on a page of their own so the rider
-// can see at a glance which numbers leave the display and which do not.
-enum ProfileExtraField : uint8_t {
-  PROFILE_EXTRA_CRUISE_MAX = 0,
-  PROFILE_EXTRA_TOP_SPEED,
-  PROFILE_EXTRA_BATTERY_MAX_A,
-  PROFILE_EXTRA_MOTOR_MAX_A,
-  PROFILE_EXTRA_CONT_KW,
-  PROFILE_EXTRA_PEAK_KW,
-  PROFILE_EXTRA_FIELD_COUNT,
-};
-
-// The slot the values pages edit: the one selected on the first page. -1 when
-// none is selected, which the pages explain rather than showing dead tiles.
+// The slot the values page edits: the one selected on the first page. -1 when
+// none is selected, which the page explains rather than showing dead tiles.
 static int profileEditSlot() {
   return activeControllerProfile < kControllerProfileCount ? (int)activeControllerProfile : -1;
 }
 
 static const char *profileFieldTitle(int option) {
-  switch (option) {
-    case kProfileFieldVescBase + PROFILE_VESC_FORWARD:
-      return txt("FORWARD LIMIT", "ETURAJA", "VORWÄRTS-LIMIT", "LIMITE AVANT", "LÍMITE AVANCE", "LIMITE AVANTI");
-    case kProfileFieldVescBase + PROFILE_VESC_REVERSE:
-      return txt("REVERSE LIMIT", "PERUUTUSRAJA", "RÜCKWÄRTS-LIM.", "LIMITE ARRIÈRE", "LÍMITE ATRÁS", "LIMITE RETRO");
-    case kProfileFieldVescBase + PROFILE_VESC_MOTOR_SCALE:
-      return txt("MOTOR SCALE", "MOOTTORISKAALA", "MOTOR-SKALA", "ÉCHELLE MOTEUR", "ESCALA MOTOR", "SCALA MOTORE");
-    case kProfileFieldVescBase + PROFILE_VESC_BRAKE_SCALE:
-      return txt("BRAKE SCALE", "JARRUSKAALA", "BREMS-SKALA", "ÉCHELLE FREIN", "ESCALA FRENO", "SCALA FRENO");
-    case kProfileFieldVescBase + PROFILE_VESC_FIELD_WEAKENING:
+  switch (option - kProfileFieldBase) {
+    case PROFILE_FIELD_MAX_SPEED:
+      return txt("MAX SPEED", "MAX NOPEUS", "MAX-TEMPO", "VITESSE MAX", "VEL. MÁXIMA", "VEL. MASSIMA");
+    case PROFILE_FIELD_REVERSE_SPEED:
+      return txt("REVERSE", "PERUUTUS", "RÜCKWÄRTS", "ARRIÈRE", "ATRÁS", "RETRO");
+    case PROFILE_FIELD_ACCEL:
+      return txt("ACCEL %", "KIIHTYVYYS %", "BESCHL. %", "ACCÉL. %", "ACEL. %", "ACCEL %");
+    case PROFILE_FIELD_BRAKE:
+      return txt("BRAKE %", "JARRU %", "BREMSE %", "FREIN %", "FRENO %", "FRENO %");
+    case PROFILE_FIELD_FIELD_WEAKENING:
       return txt("FIELD WEAK", "KENTTÄHEIK.", "FELDSCHWÄCH.", "AFFAIBL. CHAMP", "DEBILIT. CAMPO", "INDEB. CAMPO");
-    case kProfileFieldExtraBase + PROFILE_EXTRA_CRUISE_MAX:
-      return txt("CRUISE MAX", "VAKIONOP MAX", "TEMPOMAT MAX", "RÉGUL. MAX", "CRUCERO MÁX", "CRUISE MAX");
-    case kProfileFieldExtraBase + PROFILE_EXTRA_TOP_SPEED:
-      return txt("SPEED SCALE", "NOPEUSASTEIKKO", "TEMPOSKALA", "ÉCHELLE VITESSE", "ESCALA VELOC.", "SCALA VELOC.");
-    case kProfileFieldExtraBase + PROFILE_EXTRA_BATTERY_MAX_A:
-      return vehicleFieldTitle(VEHICLE_FIELD_BATTERY_MAX_A);
-    case kProfileFieldExtraBase + PROFILE_EXTRA_MOTOR_MAX_A:
-      return vehicleFieldTitle(VEHICLE_FIELD_MOTOR_MAX_A);
-    case kProfileFieldExtraBase + PROFILE_EXTRA_CONT_KW:
-      return vehicleFieldTitle(VEHICLE_FIELD_CONT_KW);
-    case kProfileFieldExtraBase + PROFILE_EXTRA_PEAK_KW:
-      return vehicleFieldTitle(VEHICLE_FIELD_PEAK_KW);
+    case PROFILE_FIELD_MOTOR_AMPS:
+      return txt("MOTOR AMPS", "MOOTTORI A", "MOTOR A", "MOTEUR A", "MOTOR A", "MOTORE A");
+    case PROFILE_FIELD_BATTERY_AMPS:
+      return txt("BATTERY AMPS", "AKKU A", "AKKU A", "BATTERIE A", "BATERÍA A", "BATTERIA A");
     default:
       return "";
   }
@@ -429,17 +406,14 @@ static const char *profileFieldTitle(int option) {
 
 // The unit a field is entered in, for the editor's hint line.
 static const char *profileFieldUnit(int option) {
-  switch (option) {
-    case kProfileFieldVescBase + PROFILE_VESC_MOTOR_SCALE:
-    case kProfileFieldVescBase + PROFILE_VESC_BRAKE_SCALE:
+  switch (option - kProfileFieldBase) {
+    case PROFILE_FIELD_ACCEL:
+    case PROFILE_FIELD_BRAKE:
       return "%";
-    case kProfileFieldVescBase + PROFILE_VESC_FIELD_WEAKENING:
-    case kProfileFieldExtraBase + PROFILE_EXTRA_BATTERY_MAX_A:
-    case kProfileFieldExtraBase + PROFILE_EXTRA_MOTOR_MAX_A:
+    case PROFILE_FIELD_FIELD_WEAKENING:
+    case PROFILE_FIELD_MOTOR_AMPS:
+    case PROFILE_FIELD_BATTERY_AMPS:
       return "A";
-    case kProfileFieldExtraBase + PROFILE_EXTRA_CONT_KW:
-    case kProfileFieldExtraBase + PROFILE_EXTRA_PEAK_KW:
-      return "kW";
     default:
       return "km/h";
   }
@@ -448,47 +422,19 @@ static const char *profileFieldUnit(int option) {
 static void profileFieldValue(int option, char *buffer, size_t size) {
   const int slot = profileEditSlot();
   if (slot < 0) {
-    snprintf(buffer, size, "%s", txt("no slot", "ei paikkaa", "kein Slot", "aucun slot", "sin ranura", "nessuno"));
+    snprintf(buffer, size, "%s", txt("no profile", "ei profiilia", "kein Profil", "aucun profil", "sin perfil", "nessun profilo"));
     return;
   }
   const ControllerProfile &p = controllerProfiles[slot];
-  switch (option) {
-    case kProfileFieldVescBase + PROFILE_VESC_FORWARD:
-      snprintf(buffer, size, "%u km/h", (unsigned)p.forwardSpeedKmh);
-      return;
-    case kProfileFieldVescBase + PROFILE_VESC_REVERSE:
-      snprintf(buffer, size, "%u km/h", (unsigned)p.reverseSpeedKmh);
-      return;
-    case kProfileFieldVescBase + PROFILE_VESC_MOTOR_SCALE:
-      snprintf(buffer, size, "%u%%", (unsigned)p.currentMaxScalePercent);
-      return;
-    case kProfileFieldVescBase + PROFILE_VESC_BRAKE_SCALE:
-      snprintf(buffer, size, "%u%%", (unsigned)p.currentMinScalePercent);
-      return;
-    case kProfileFieldVescBase + PROFILE_VESC_FIELD_WEAKENING:
-      snprintf(buffer, size, "%u A", (unsigned)p.fieldWeakeningAmps);
-      return;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_CRUISE_MAX:
-      snprintf(buffer, size, "%u km/h", (unsigned)p.cruiseMaxKmh);
-      return;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_TOP_SPEED:
-      snprintf(buffer, size, "%u km/h", (unsigned)p.topSpeedKmh);
-      return;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_BATTERY_MAX_A:
-      snprintf(buffer, size, "%u A", (unsigned)p.batteryMaxAmps);
-      return;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_MOTOR_MAX_A:
-      snprintf(buffer, size, "%u A", (unsigned)p.motorMaxAmps);
-      return;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_CONT_KW:
-      snprintf(buffer, size, "%u.%u kW", (unsigned)(p.continuousPowerDeciKw / 10), (unsigned)(p.continuousPowerDeciKw % 10));
-      return;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_PEAK_KW:
-      snprintf(buffer, size, "%u.%u kW", (unsigned)(p.peakPowerDeciKw / 10), (unsigned)(p.peakPowerDeciKw % 10));
-      return;
-    default:
-      buffer[0] = '\0';
-      return;
+  switch (option - kProfileFieldBase) {
+    case PROFILE_FIELD_MAX_SPEED: snprintf(buffer, size, "%u km/h", (unsigned)p.maxSpeedKmh); return;
+    case PROFILE_FIELD_REVERSE_SPEED: snprintf(buffer, size, "%u km/h", (unsigned)p.reverseSpeedKmh); return;
+    case PROFILE_FIELD_ACCEL: snprintf(buffer, size, "%u%%", (unsigned)p.accelPercent); return;
+    case PROFILE_FIELD_BRAKE: snprintf(buffer, size, "%u%%", (unsigned)p.brakePercent); return;
+    case PROFILE_FIELD_FIELD_WEAKENING: snprintf(buffer, size, "%u A", (unsigned)p.fieldWeakeningAmps); return;
+    case PROFILE_FIELD_MOTOR_AMPS: snprintf(buffer, size, "%u A", (unsigned)p.motorAmps); return;
+    case PROFILE_FIELD_BATTERY_AMPS: snprintf(buffer, size, "%u A", (unsigned)p.batteryAmps); return;
+    default: buffer[0] = '\0'; return;
   }
 }
 
@@ -501,49 +447,21 @@ static void profileFieldEditText(int option, char *buffer, size_t size) {
     return;
   }
   const ControllerProfile &p = controllerProfiles[slot];
-  switch (option) {
-    case kProfileFieldVescBase + PROFILE_VESC_FORWARD:
-      snprintf(buffer, size, "%u", (unsigned)p.forwardSpeedKmh);
-      return;
-    case kProfileFieldVescBase + PROFILE_VESC_REVERSE:
-      snprintf(buffer, size, "%u", (unsigned)p.reverseSpeedKmh);
-      return;
-    case kProfileFieldVescBase + PROFILE_VESC_MOTOR_SCALE:
-      snprintf(buffer, size, "%u", (unsigned)p.currentMaxScalePercent);
-      return;
-    case kProfileFieldVescBase + PROFILE_VESC_BRAKE_SCALE:
-      snprintf(buffer, size, "%u", (unsigned)p.currentMinScalePercent);
-      return;
-    case kProfileFieldVescBase + PROFILE_VESC_FIELD_WEAKENING:
-      snprintf(buffer, size, "%u", (unsigned)p.fieldWeakeningAmps);
-      return;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_CRUISE_MAX:
-      snprintf(buffer, size, "%u", (unsigned)p.cruiseMaxKmh);
-      return;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_TOP_SPEED:
-      snprintf(buffer, size, "%u", (unsigned)p.topSpeedKmh);
-      return;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_BATTERY_MAX_A:
-      snprintf(buffer, size, "%u", (unsigned)p.batteryMaxAmps);
-      return;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_MOTOR_MAX_A:
-      snprintf(buffer, size, "%u", (unsigned)p.motorMaxAmps);
-      return;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_CONT_KW:
-      snprintf(buffer, size, "%u", (unsigned)(p.continuousPowerDeciKw / 10));
-      return;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_PEAK_KW:
-      snprintf(buffer, size, "%u", (unsigned)(p.peakPowerDeciKw / 10));
-      return;
-    default:
-      buffer[0] = '\0';
-      return;
+  switch (option - kProfileFieldBase) {
+    case PROFILE_FIELD_MAX_SPEED: snprintf(buffer, size, "%u", (unsigned)p.maxSpeedKmh); return;
+    case PROFILE_FIELD_REVERSE_SPEED: snprintf(buffer, size, "%u", (unsigned)p.reverseSpeedKmh); return;
+    case PROFILE_FIELD_ACCEL: snprintf(buffer, size, "%u", (unsigned)p.accelPercent); return;
+    case PROFILE_FIELD_BRAKE: snprintf(buffer, size, "%u", (unsigned)p.brakePercent); return;
+    case PROFILE_FIELD_FIELD_WEAKENING: snprintf(buffer, size, "%u", (unsigned)p.fieldWeakeningAmps); return;
+    case PROFILE_FIELD_MOTOR_AMPS: snprintf(buffer, size, "%u", (unsigned)p.motorAmps); return;
+    case PROFILE_FIELD_BATTERY_AMPS: snprintf(buffer, size, "%u", (unsigned)p.batteryAmps); return;
+    default: buffer[0] = '\0'; return;
   }
 }
 
 // Writes an edited value back into the selected slot. Values are clamped here
-// rather than only in the editor, so a paste or a stray digit cannot leave a slot
-// holding a limit the controller would refuse.
+// rather than only in the editor, so a paste or a stray digit cannot leave a
+// profile holding a limit the controller would refuse.
 static void saveProfileInputValue(int option, const char *text) {
   const int slot = profileEditSlot();
   if (slot < 0) return;
@@ -551,44 +469,18 @@ static void saveProfileInputValue(int option, const char *text) {
   ControllerProfile &p = controllerProfiles[slot];
 
   auto clampLong = [](long v, long lo, long hi) { return v < lo ? lo : (v > hi ? hi : v); };
-  switch (option) {
-    case kProfileFieldVescBase + PROFILE_VESC_FORWARD:
-      p.forwardSpeedKmh = (uint16_t)clampLong(value, 0, 200);
-      break;
-    case kProfileFieldVescBase + PROFILE_VESC_REVERSE:
-      p.reverseSpeedKmh = (uint16_t)clampLong(value, 0, 100);
-      break;
-    case kProfileFieldVescBase + PROFILE_VESC_MOTOR_SCALE:
-      p.currentMaxScalePercent = (uint16_t)clampLong(value, 1, 100);
-      break;
-    case kProfileFieldVescBase + PROFILE_VESC_BRAKE_SCALE:
-      p.currentMinScalePercent = (uint16_t)clampLong(value, 1, 100);
-      break;
-    case kProfileFieldVescBase + PROFILE_VESC_FIELD_WEAKENING:
+  switch (option - kProfileFieldBase) {
+    case PROFILE_FIELD_MAX_SPEED: p.maxSpeedKmh = (uint16_t)clampLong(value, 0, 200); break;
+    case PROFILE_FIELD_REVERSE_SPEED: p.reverseSpeedKmh = (uint16_t)clampLong(value, 0, 100); break;
+    case PROFILE_FIELD_ACCEL: p.accelPercent = (uint16_t)clampLong(value, 1, 100); break;
+    case PROFILE_FIELD_BRAKE: p.brakePercent = (uint16_t)clampLong(value, 1, 100); break;
+    case PROFILE_FIELD_FIELD_WEAKENING:
       p.fieldWeakeningAmps = (uint16_t)clampLong(value, 0, (long)kVescProfileMaxFieldWeakeningAmps);
       break;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_CRUISE_MAX:
-      p.cruiseMaxKmh = (uint16_t)clampLong(value, 0, 200);
-      break;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_TOP_SPEED:
-      p.topSpeedKmh = (uint16_t)clampLong(value, 5, 300);
-      break;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_BATTERY_MAX_A:
-      p.batteryMaxAmps = (uint16_t)clampLong(value, 1, 500);
-      break;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_MOTOR_MAX_A:
-      p.motorMaxAmps = (uint16_t)clampLong(value, 1, 500);
-      break;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_CONT_KW:
-      p.continuousPowerDeciKw = (uint16_t)clampLong(value, 1, 500) * 10;
-      break;
-    case kProfileFieldExtraBase + PROFILE_EXTRA_PEAK_KW:
-      p.peakPowerDeciKw = (uint16_t)clampLong(value, 1, 500) * 10;
-      break;
-    default:
-      return;
+    case PROFILE_FIELD_MOTOR_AMPS: p.motorAmps = (uint16_t)clampLong(value, 1, 500); break;
+    case PROFILE_FIELD_BATTERY_AMPS: p.batteryAmps = (uint16_t)clampLong(value, 1, 500); break;
+    default: return;
   }
-  p.valid = true;
   saveAppSettings();
 }
 
@@ -2479,14 +2371,14 @@ static const char *statusNoticeText(StatusNotice notice) {
                  "TEMPOMAT BRAUCHT VESC-LINK", "RÉGULATEUR : LIEN VESC REQUIS",
                  "CONTROL CRUCERO: SE REQUIERE VESC", "CRUISE: SERVE COLLEGAMENTO VESC");
     case NOTICE_PROFILE_APPLIED:
-      return txt("PROFILE APPLIED", "PROFIILI KÄYTÖSSÄ", "PROFIL AKTIV", "PROFIL APPLIQUÉ",
-                 "PERFIL APLICADO", "PROFILO APPLICATO");
-    case NOTICE_PROFILE_SAVED:
-      return txt("SETUP SAVED TO SLOT", "KOKOONPANO TALLENNETTU", "SETUP GESPEICHERT",
-                 "CONFIGURATION ENREGISTRÉE", "AJUSTE GUARDADO", "SETUP SALVATO");
+      // The write is confirmed by the read-back on the page, so the toast reports
+      // what the display has done, not what the controller is assumed to have
+      // taken.
+      return txt("PROFILE SENT", "PROFIILI LÄHETETTY", "PROFIL GESENDET", "PROFIL ENVOYÉ",
+                 "PERFIL ENVIADO", "PROFILO INVIATO");
     case NOTICE_PROFILE_CLEARED:
-      return txt("SLOT CLEARED", "PAIKKA TYHJENNETTY", "SLOT GELEERT", "EMPLACEMENT VIDÉ",
-                 "RANURA VACIADA", "SLOT SVUOTATO");
+      return txt("PROFILE RESET", "PROFIILI PALAUTETTU", "PROFIL ZURÜCKGESETZT", "PROFIL RÉINITIALISÉ",
+                 "PERFIL RESTAURADO", "PROFILO RIPRISTINATO");
     default:
       return "";
   }
@@ -4071,7 +3963,7 @@ static uint8_t submenuItemCount() {
     case SUBMENU_CRUISE:
       return 2;
     case SUBMENU_PROFILES:
-      return 4;
+      return 3;
     default:
       return 1;
   }
@@ -4173,12 +4065,10 @@ static const char *submenuCurrentName() {
       return txt("Modes & engage", "Tilat ja käyttö", "Modi & Start", "Modes et activation", "Modos y activación", "Modalità e attivazione");
     case SUBMENU_PROFILES:
       if (profilePage == 0)
-        return txt("Saved setups", "Tallennetut kokoonpanot", "Gespeicherte Setups", "Configurations enregistrées", "Ajustes guardados", "Setup salvati");
+        return txt("Profiles", "Profiilit", "Profile", "Profils", "Perfiles", "Profili");
       if (profilePage == 1)
-        return txt("Controller limits", "Ohjaimen rajat", "Controller-Limits", "Limites contrôleur", "Límites controlador", "Limiti controller");
-      if (profilePage == 2)
-        return txt("Display extras", "Näytön lisät", "Display-Extras", "Extras affichage", "Extras pantalla", "Extra display");
-      return txt("Apply & manage", "Käytä ja hallitse", "Anwenden & verwalten", "Appliquer & gérer", "Aplicar y gestionar", "Applica e gestisci");
+        return txt("Limits", "Rajat", "Limits", "Limites", "Límites", "Limiti");
+      return txt("Apply", "Käytä", "Anwenden", "Appliquer", "Aplicar", "Applica");
     default:
       return "";
   }
@@ -4251,9 +4141,9 @@ static void submenuAction(int id) {
       const int slot = profileEditSlot();
       closeDeveloperPrompt();
       if (slot >= 0) {
-        // Apply the display extras now, and queue the controller limits for the
-        // telemetry task. The notice waits for the read-back, which the pages
-        // show on their own status line.
+        // Selecting is the whole local change; the limits go to the controller
+        // through the telemetry task, which owns the link. The notice is queued
+        // here and the pages show the read-back on their own status line.
         applyControllerProfile((uint8_t)slot);
         controllerProfileWrite((uint8_t)slot);
         queueStatusNotice(NOTICE_PROFILE_APPLIED);
@@ -4861,62 +4751,40 @@ static void submenuAction(int id) {
       return;
     case SUBMENU_PROFILES:
       if (profilePage == 0) {
-        // Slots: pick the profile the other pages edit. Selecting is safe and
-        // cheap; writing it to the controller is the confirmed action on the
-        // last page. An empty slot is filled from the current display setup so
-        // there is something to edit.
+        // Slots: pick the profile the values page edits, and the one the
+        // dashboard badge names. Selecting is safe and cheap; writing it to the
+        // controller is the confirmed action on the last page.
         if (option < 0 || option >= kControllerProfileCount) return;
-        if (!controllerProfiles[option].valid) {
-          saveControllerProfile(option, controllerProfiles[option].name);
-          queueStatusNotice(NOTICE_PROFILE_SAVED);
-        }
-        activeControllerProfile = option;
-        saveAppSettings();
+        applyControllerProfile((uint8_t)option);
         queueRebuild(SCREEN_SUBMENU);
         return;
       }
-      if (profilePage == 1 && option >= kProfileFieldVescBase &&
-          option < kProfileFieldVescBase + PROFILE_VESC_FIELD_COUNT) {
-        profileTextField = option;
-        textInputContext = INPUT_PROFILE_FIELD;
-        queueRebuild(SCREEN_TEXT_INPUT);
+      if (profilePage == 1) {
+        if (option >= kProfileFieldBase && option < kProfileFieldBase + PROFILE_FIELD_COUNT) {
+          profileTextField = option;
+          textInputContext = INPUT_PROFILE_FIELD;
+          queueRebuild(SCREEN_TEXT_INPUT);
+        }
         return;
       }
-      if (profilePage == 2 && option >= kProfileFieldExtraBase &&
-          option < kProfileFieldExtraBase + PROFILE_EXTRA_FIELD_COUNT) {
-        profileTextField = option;
-        textInputContext = INPUT_PROFILE_FIELD;
-        queueRebuild(SCREEN_TEXT_INPUT);
-        return;
-      }
-      if (profilePage == 3) {
+      {
         const int slot = profileEditSlot();
         if (option == kProfileOptApply) {
           if (slot < 0) return;
           showConfirmationDialog(
               txt("WRITE PROFILE TO CONTROLLER", "KIRJOITA PROFIILI OHJAIMELLE", "PROFIL IN CONTROLLER SCHREIBEN",
                   "ÉCRIRE LE PROFIL AU CONTRÔLEUR", "ESCRIBIR PERFIL AL CONTROLADOR", "SCRIVI PROFILO NEL CONTROLLER"),
-              txt("The speed and current limits are applied to the controller now and read back to confirm. Nothing is written to its flash.",
-                  "Nopeus- ja virtarajat viedään ohjaimeen nyt ja luetaan takaisin varmistukseksi. Sen flash-muistiin ei kirjoiteta mitään.",
-                  "Geschwindigkeits- und Stromlimits werden jetzt auf den Controller angewandt und zur Bestätigung zurückgelesen. Sein Flash wird nicht beschrieben.",
-                  "Les limites de vitesse et de courant sont appliquées au contrôleur puis relues pour confirmation. Sa mémoire flash n'est pas écrite.",
-                  "Los límites de velocidad y corriente se aplican al controlador y se releen para confirmar. No se escribe su memoria flash.",
-                  "I limiti di velocità e corrente sono applicati al controller e riletti per conferma. La sua flash non viene scritta."),
+              txt("The speed, current and field-weakening limits are applied to the controller now and read back to confirm. Nothing is written to its flash.",
+                  "Nopeus-, virta- ja kenttäheikennysrajat viedään ohjaimeen nyt ja luetaan takaisin varmistukseksi. Sen flash-muistiin ei kirjoiteta mitään.",
+                  "Geschwindigkeits-, Strom- und Feldschwächungslimits werden jetzt angewandt und zur Bestätigung zurückgelesen. Sein Flash wird nicht beschrieben.",
+                  "Les limites de vitesse, de courant et d'affaiblissement sont appliquées puis relues pour confirmation. Sa flash n'est pas écrite.",
+                  "Los límites de velocidad, corriente y debilitamiento se aplican y se releen para confirmar. No se escribe su flash.",
+                  "I limiti di velocità, corrente e indebolimento sono applicati e riletti per conferma. La flash non viene scritta."),
               txt("APPLY", "KÄYTÄ", "ANWENDEN", "APPLIQUER", "APLICAR", "APPLICA"),
               BTN_PROFILE_APPLY_CONFIRM);
           return;
         }
-        if (option == kProfileOptSave) {
-          if (slot >= 0) {
-            // Capture the display extras from the live setup into the slot; the
-            // controller limits are the slot's own and are left alone.
-            saveControllerProfile((uint8_t)slot, controllerProfiles[slot].name);
-            queueStatusNotice(NOTICE_PROFILE_SAVED);
-          }
-          queueRebuild(SCREEN_SUBMENU);
-          return;
-        }
-        if (option == kProfileOptClear) {
+        if (option == kProfileOptReset) {
           if (slot >= 0) {
             resetControllerProfile((uint8_t)slot);
             queueStatusNotice(NOTICE_PROFILE_CLEARED);
@@ -4926,7 +4794,6 @@ static void submenuAction(int id) {
         }
         return;
       }
-      return;
     case SUBMENU_CRUISE:
       switch (option) {
         case kCruiseOptEnable:
@@ -6310,94 +6177,72 @@ static void showSubmenu() {
   }
 
   if (submenuType == SUBMENU_PROFILES) {
-    profilePage = min<uint8_t>(profilePage, 3);
+    profilePage = min<uint8_t>(profilePage, 2);
     makeMenuTopBar(scr, vehicleSectionTitle(SUBMENU_PROFILES), profilePage + 1, submenuItemCount(), true);
     if (profilePage == 0) {
-      // Slots: which profile the values pages edit. Selecting here never touches
-      // the controller; that is the confirmed action on the last page.
+      // Slots: which profile the values page edits, and which the dashboard
+      // badge names. The badge colour is the profile's own.
       for (uint8_t i = 0; i < kControllerProfileCount; ++i) {
-        const ControllerProfile &p = controllerProfiles[i];
-        const char *status;
-        if (activeControllerProfile == i) status = txt("Selected", "Valittu", "Gewählt", "Sélectionné", "Elegido", "Scelto");
-        else if (p.valid) status = txt("Saved", "Tallennettu", "Gespeichert", "Enregistré", "Guardado", "Salvato");
-        else status = txt("Empty - tap to fill", "Tyhjä - täytä", "Leer - füllen", "Vide - remplir", "Vacío - rellenar", "Vuoto - riempi");
-        // A slot always has a name once the settings have loaded; the fallback is
-        // only so a never-initialised slot cannot render as a blank tile.
+        const char *status = activeControllerProfile == i
+                                 ? txt("Selected", "Valittu", "Gewählt", "Sélectionné", "Elegido", "Scelto")
+                                 : txt("Tap to select", "Valitse", "Zum Wählen", "Choisir", "Elegir", "Scegli");
         makeMenuButton(scr, i % 2 ? kTwoColRightX : kMenuEdgeX, 48 + (i / 2) * 60,
-                       i % 2 ? kTwoColRightW : kTwoColLeftW, 54, p.name[0] ? p.name : "PROFILE", status,
+                       i % 2 ? kTwoColRightW : kTwoColLeftW, 54, controllerProfileName(i), status,
                        activeControllerProfile == i, BTN_OPTION_BASE + i);
       }
-      makeExplanationAt(
-          scr, 168,
-          txt("Tap a slot to edit it, then apply it on the last page.",
-              "Valitse paikka muokattavaksi ja käytä se viimeisellä sivulla.",
-              "Slot zum Bearbeiten wählen, dann auf der letzten Seite anwenden.",
-              "Touchez un slot pour l'éditer, puis appliquez-le sur la dernière page.",
-              "Toca una ranura para editarla y aplícala en la última página.",
-              "Tocca uno slot per modificarlo, poi applicalo nell'ultima pagina."));
-    } else if (profilePage == 1 || profilePage == 2) {
-      // Page 1 is what goes to the controller; page 2 is what stays here. Two
-      // pages rather than one grid so the rider can see the difference at a
-      // glance, and neither grid runs past three rows.
-      const int base = profilePage == 1 ? kProfileFieldVescBase : kProfileFieldExtraBase;
-      const uint8_t count = profilePage == 1 ? (uint8_t)PROFILE_VESC_FIELD_COUNT
-                                             : (uint8_t)PROFILE_EXTRA_FIELD_COUNT;
-      for (uint8_t i = 0; i < count; ++i) {
-        const int option = base + i;
+      makeExplanationAt(scr, 168,
+                        txt("Select a profile, set its limits, then apply it on the last page.",
+                            "Valitse profiili, aseta rajat ja käytä se viimeisellä sivulla.",
+                            "Profil wählen, Limits setzen, dann auf der letzten Seite anwenden.",
+                            "Choisissez un profil, réglez les limites, appliquez-le en dernière page.",
+                            "Elige un perfil, fija los límites y aplícalo en la última página.",
+                            "Scegli un profilo, imposta i limiti, applicalo nell'ultima pagina."));
+    } else if (profilePage == 1) {
+      // One grid: every value a profile stores goes to the controller, so there
+      // is nothing to separate out. Seven tiles take three rows, which is why the
+      // rows are tighter here than on the other pages.
+      for (uint8_t i = 0; i < PROFILE_FIELD_COUNT; ++i) {
+        const int option = kProfileFieldBase + i;
         char value[32];
         profileFieldValue(option, value, sizeof(value));
         const int col = i % 3;
         const int row = i / 3;
         const int x = col == 0 ? kMenuEdgeX : (col == 1 ? kThreeColX1 : kThreeColX2);
-        makeMenuButton(scr, x, 48 + row * 58, kThreeColW, 54, profileFieldTitle(option), value, false,
+        makeMenuButton(scr, x, 44 + row * 54, kThreeColW, 50, profileFieldTitle(option), value, false,
                        BTN_OPTION_BASE + option);
       }
-      if (profilePage == 1) {
-        // The controller's own numbers, read back over COMM_GET_MCCONF_TEMP:
-        // labelled CTRL in a language-neutral line, the way a gauge reads.
-        if (vescLiveProfileValid) {
-          const float rpmPerKmh = drivetrainRpmPerKmh();
-          char ctrl[64];
-          snprintf(ctrl, sizeof(ctrl), "CTRL  F %u  R %u km/h   %u%%",
-                   (unsigned)vescProfileSpeedFromErpm((int32_t)vescLiveProfile.maxErpm, rpmPerKmh),
-                   (unsigned)vescProfileSpeedFromErpm((int32_t)vescLiveProfile.minErpm, rpmPerKmh),
-                   (unsigned)vescProfileScalePercent(vescLiveProfile.currentMaxScale));
-          makeExplanationAt(scr, 168, ctrl);
-        } else {
-          makeExplanationAt(scr, 168,
-                            txt("These go to the controller when the profile is applied.",
-                                "Nämä viedään ohjaimeen, kun profiilia käytetään.",
-                                "Diese gehen an den Controller, wenn das Profil angewandt wird.",
-                                "Ceux-ci vont au contrôleur quand le profil est appliqué.",
-                                "Estos van al controlador al aplicar el perfil.",
-                                "Questi vanno al controller quando il profilo è applicato."));
-        }
+      // The controller's own numbers, read back over COMM_GET_MCCONF_TEMP:
+      // labelled CTRL in a language-neutral line, the way a gauge reads.
+      if (vescLiveProfileValid) {
+        const float rpmPerKmh = drivetrainRpmPerKmh();
+        char ctrl[64];
+        snprintf(ctrl, sizeof(ctrl), "CTRL  F %u  R %u km/h   %u%%",
+                 (unsigned)vescProfileSpeedFromErpm((int32_t)vescLiveProfile.maxErpm, rpmPerKmh),
+                 (unsigned)vescProfileSpeedFromErpm((int32_t)vescLiveProfile.minErpm, rpmPerKmh),
+                 (unsigned)vescProfileScalePercent(vescLiveProfile.currentMaxScale));
+        makeExplanationAt(scr, 210, ctrl);
       } else {
-        makeExplanationAt(scr, 168,
-                          txt("Display only: these never leave the display.",
-                              "Vain näyttö: nämä eivät lähde näytöltä.",
-                              "Nur Anzeige: diese verlassen das Display nicht.",
-                              "Affichage seul : ils ne quittent pas le display.",
-                              "Solo pantalla: no salen del display.",
-                              "Solo display: non lasciano il display."));
+        makeExplanationAt(scr, 210,
+                          txt("Written to the controller when applied.",
+                              "Viedään ohjaimeen käytettäessä.",
+                              "Beim Anwenden an den Controller.",
+                              "Écrit au contrôleur à l'application.",
+                              "Se escribe al controlador al aplicar.",
+                              "Scritto al controller all'applicazione."));
       }
     } else {
       const int slot = profileEditSlot();
-      const bool haveSlot = slot >= 0;
-      const char *name = haveSlot ? controllerProfiles[slot].name
-                                  : txt("No slot selected", "Ei valittua paikkaa", "Kein Slot gewählt", "Aucun slot", "Sin ranura", "Nessuno slot");
-      makeMenuButton(scr, kMenuEdgeX, 46, kMenuContentW, 46,
+      const char *name = slot >= 0 ? controllerProfileName((uint8_t)slot)
+                                   : txt("No profile selected", "Ei valittua profiilia", "Kein Profil gewählt", "Aucun profil", "Sin perfil", "Nessun profilo");
+      makeMenuButton(scr, kMenuEdgeX, 58, kMenuContentW, 56,
                      txt("APPLY TO CONTROLLER", "VIE OHJAIMELLE", "AUF CONTROLLER ANWENDEN",
                          "APPLIQUER AU CONTRÔLEUR", "APLICAR AL CONTROLADOR", "APPLICA AL CONTROLLER"),
                      name, false, BTN_OPTION_BASE + kProfileOptApply);
-      makeMenuButton(scr, kMenuEdgeX, 98, kMenuContentW, 46,
-                     txt("SAVE DISPLAY SETUP", "TALLENNA NÄYTTÖASETELMA", "DISPLAY-SETUP SPEICHERN",
-                         "ENREGISTRER L'AFFICHAGE", "GUARDAR AJUSTE PANTALLA", "SALVA SETUP DISPLAY"),
-                     name, false, BTN_OPTION_BASE + kProfileOptSave);
-      makeMenuButton(scr, kMenuEdgeX, 150, kMenuContentW, 46,
-                     txt("CLEAR SLOT", "TYHJENNÄ PAIKKA", "SLOT LEEREN", "VIDER LE SLOT", "VACIAR RANURA", "SVUOTA SLOT"),
-                     haveSlot ? name : "", false, BTN_OPTION_BASE + kProfileOptClear);
-      makeExplanationAt(scr, 202,
+      makeMenuButton(scr, kMenuEdgeX, 126, kMenuContentW, 56,
+                     txt("RESTORE DEFAULTS", "PALAUTA OLETUKSET", "STANDARD WIEDERHERSTELLEN",
+                         "RÉTABLIR LES DÉFAUTS", "RESTAURAR VALORES", "RIPRISTINA DEFAULT"),
+                     slot >= 0 ? name : "", false, BTN_OPTION_BASE + kProfileOptReset);
+      makeExplanationAt(scr, 194,
                         txt("Apply writes the limits to the controller, then reads them back to confirm.",
                             "Käyttö vie rajat ohjaimeen ja lukee ne takaisin varmistukseksi.",
                             "Anwenden schreibt die Limits auf den Controller und liest sie zur Bestätigung zurück.",
@@ -6407,7 +6252,6 @@ static void showSubmenu() {
     }
     loadScreen(scr); return;
   }
-
   if (submenuType == SUBMENU_CONTROLLER_TYPE) {
     makeMenuTopBar(scr, title, 1, 1, false);
     if (controllerSetupStage == CONTROLLER_SETUP_TYPE) {
@@ -8601,7 +8445,7 @@ void uiPreviewSetSubmenu(SubmenuType type, uint8_t page, bool customSpeed) {
   displayPage = page % displayPageCount();
   panelPage = page % kPanelPageCount;
   cruisePage = page % 2;
-  profilePage = page % 4;
+  profilePage = page % 3;
   speedSetupMode = customSpeed ? SPEED_SETUP_CUSTOM : SPEED_SETUP_PRESET;
   resetConfirmMode = -1;
   if (type == SUBMENU_DASH_UI && !colorPaletteOpen) dashUiGridOpen = true;

@@ -129,7 +129,7 @@ static constexpr const char *kBarGraphProfileRevisionKey = "barsProfileRev";
 // Increment when the ControllerProfile layout changes. Stored in NVS beside the
 // blob; a mismatch discards the stored profiles rather than reading them back
 // shifted.
-static constexpr uint8_t kControllerProfileRevision = 3;
+static constexpr uint8_t kControllerProfileRevision = 4;
 static constexpr const char *kControllerProfileRevisionKey = "profRev";
 static const uint8_t kDashboardDataCounts[MODE_COUNT] = {
     8, 8, 3, 11, 4, 3, 7, 4, 7, 5, 4, 4,
@@ -1402,13 +1402,10 @@ static ControllerProfile persistedControllerProfiles[kControllerProfileCount] = 
 static bool persistedControllerProfilesKnown = false;
 
 static bool sameControllerProfile(const ControllerProfile &a, const ControllerProfile &b) {
-  return strncmp(a.name, b.name, sizeof(a.name)) == 0 && a.forwardSpeedKmh == b.forwardSpeedKmh &&
-         a.reverseSpeedKmh == b.reverseSpeedKmh && a.currentMaxScalePercent == b.currentMaxScalePercent &&
-         a.currentMinScalePercent == b.currentMinScalePercent && a.fieldWeakeningAmps == b.fieldWeakeningAmps &&
-         a.cruiseMaxKmh == b.cruiseMaxKmh && a.topSpeedKmh == b.topSpeedKmh &&
-         a.batteryMaxAmps == b.batteryMaxAmps && a.motorMaxAmps == b.motorMaxAmps &&
-         a.continuousPowerDeciKw == b.continuousPowerDeciKw && a.peakPowerDeciKw == b.peakPowerDeciKw &&
-         a.valid == b.valid;
+  return a.maxSpeedKmh == b.maxSpeedKmh && a.reverseSpeedKmh == b.reverseSpeedKmh &&
+         a.accelPercent == b.accelPercent && a.brakePercent == b.brakePercent &&
+         a.fieldWeakeningAmps == b.fieldWeakeningAmps && a.motorAmps == b.motorAmps &&
+         a.batteryAmps == b.batteryAmps;
 }
 
 static bool sameControllerProfiles(const ControllerProfile *a, const ControllerProfile *b) {
@@ -1417,29 +1414,49 @@ static bool sameControllerProfiles(const ControllerProfile *a, const ControllerP
   return true;
 }
 
+// The three profiles are named, not user-labelled: Eco, Drive and Sport are the
+// names riders and the law already use, and a fixed name is what lets the
+// dashboard badge be a single letter.
+const char *controllerProfileName(uint8_t index) {
+  switch (index) {
+    case 0: return "ECO";
+    case 1: return "DRIVE";
+    case 2: return "SPORT";
+    default: return "";
+  }
+}
+
+const char *controllerProfileLetter(uint8_t index) {
+  switch (index) {
+    case 0: return "E";
+    case 1: return "D";
+    case 2: return "S";
+    default: return "";
+  }
+}
+
 static void setDefaultControllerProfile(uint8_t index) {
   if (index >= kControllerProfileCount) return;
   ControllerProfile &p = controllerProfiles[index];
   memset(&p, 0, sizeof(p));
-  // Named but empty: the slot shows a ready label and fills in when the rider
-  // captures the current setup, so a fresh display lists prepared slots rather
-  // than blanks. The controller limits start at values that will not surprise
-  // anyone if applied before the rider edits them.
-  snprintf(p.name, sizeof(p.name), "PROFILE %u", (unsigned)(index + 1));
-  p.forwardSpeedKmh = 25;
-  p.reverseSpeedKmh = 5;
-  p.currentMaxScalePercent = 100;
-  p.currentMinScalePercent = 100;
-  p.fieldWeakeningAmps = 0;
-  // The display extras mirror the shipped defaults, so an untouched slot is a
-  // complete, plausible setup.
-  p.cruiseMaxKmh = 25;
-  p.topSpeedKmh = 100;
-  p.batteryMaxAmps = 100;
-  p.motorMaxAmps = 150;
-  p.continuousPowerDeciKw = 30;
-  p.peakPowerDeciKw = 60;
-  p.valid = false;
+  // Each profile starts somewhere plausible for its name, so selecting one and
+  // applying it does something sensible before the rider tunes it. The motor and
+  // battery currents are the absolute limits; the percentages scale the
+  // controller's own configured currents.
+  switch (index) {
+    case 0:  // ECO
+      p.maxSpeedKmh = 25; p.reverseSpeedKmh = 5; p.accelPercent = 40; p.brakePercent = 60;
+      p.fieldWeakeningAmps = 0; p.motorAmps = 40; p.batteryAmps = 20;
+      break;
+    case 1:  // DRIVE
+      p.maxSpeedKmh = 45; p.reverseSpeedKmh = 5; p.accelPercent = 70; p.brakePercent = 80;
+      p.fieldWeakeningAmps = 5; p.motorAmps = 80; p.batteryAmps = 35;
+      break;
+    default:  // SPORT
+      p.maxSpeedKmh = 100; p.reverseSpeedKmh = 10; p.accelPercent = 100; p.brakePercent = 100;
+      p.fieldWeakeningAmps = 15; p.motorAmps = 150; p.batteryAmps = 60;
+      break;
+  }
 }
 
 static void setDefaultControllerProfiles() {
@@ -1447,55 +1464,10 @@ static void setDefaultControllerProfiles() {
   activeControllerProfile = 0xFF;
 }
 
-void saveControllerProfile(uint8_t index, const char *name) {
-  if (index >= kControllerProfileCount) return;
-  const ControllerProfile &slot = controllerProfiles[index];
-  // Capture the display extras from the live setup. The controller-facing limits
-  // belong to the values page, so a capture keeps the ones the slot already has
-  // (or the defaults for a slot that had none).
-  const uint16_t forward = slot.valid ? slot.forwardSpeedKmh : (uint16_t)min(topSpeedKmh, (uint32_t)9999);
-  const uint16_t reverse = slot.valid ? slot.reverseSpeedKmh : 5;
-  const uint16_t maxScale = slot.valid ? slot.currentMaxScalePercent : 100;
-  const uint16_t minScale = slot.valid ? slot.currentMinScalePercent : 100;
-  const uint16_t fieldWeakening = slot.valid ? slot.fieldWeakeningAmps : 0;
-  char label[sizeof(slot.name)];
-  snprintf(label, sizeof(label), "%s", (name && name[0]) ? name : slot.name);
-
-  ControllerProfile &p = controllerProfiles[index];
-  memset(&p, 0, sizeof(p));
-  snprintf(p.name, sizeof(p.name), "%s", label[0] ? label : "PROFILE");
-  p.forwardSpeedKmh = forward;
-  p.reverseSpeedKmh = reverse;
-  p.currentMaxScalePercent = maxScale;
-  p.currentMinScalePercent = minScale;
-  p.fieldWeakeningAmps = fieldWeakening;
-  p.cruiseMaxKmh = cruiseMaxSpeedKmh;
-  p.topSpeedKmh = (uint16_t)min(topSpeedKmh, (uint32_t)9999);
-  p.batteryMaxAmps = batteryMaxAmps;
-  p.motorMaxAmps = motorMaxAmps;
-  p.continuousPowerDeciKw = continuousPowerDeciKw;
-  p.peakPowerDeciKw = peakPowerDeciKw;
-  p.valid = true;
-  saveAppSettings();
-}
-
 void applyControllerProfile(uint8_t index) {
-  if (index >= kControllerProfileCount || !controllerProfiles[index].valid) return;
-  const ControllerProfile &p = controllerProfiles[index];
-  // Only the display extras are applied here. The controller limits go out over
-  // the link (controllerProfileWrite), which needs the telemetry task.
-  topSpeedKmh = p.topSpeedKmh;
-  cruiseMaxSpeedKmh = p.cruiseMaxKmh;
-  batteryMaxAmps = p.batteryMaxAmps;
-  motorMaxAmps = p.motorMaxAmps;
-  continuousPowerDeciKw = p.continuousPowerDeciKw;
-  peakPowerDeciKw = p.peakPowerDeciKw;
-  // Keep the cruise window ordered after the profile moves the ceiling, and the
-  // gauge full scale above the mode limits it frames.
-  if (cruiseMinSpeedKmh >= cruiseMaxSpeedKmh) cruiseMinSpeedKmh = cruiseMaxSpeedKmh > 1 ? cruiseMaxSpeedKmh - 1 : 0;
-  if (speedMode1Kmh > topSpeedKmh) speedMode1Kmh = topSpeedKmh;
-  if (speedMode2Kmh > topSpeedKmh) speedMode2Kmh = topSpeedKmh;
-  if (speedMode3Kmh > topSpeedKmh) speedMode3Kmh = topSpeedKmh;
+  if (index >= kControllerProfileCount) return;
+  // Selecting is all this does. The limits reach the controller through
+  // controllerProfileWrite, which needs the telemetry task that owns the link.
   activeControllerProfile = index;
   saveAppSettings();
 }
@@ -1503,7 +1475,6 @@ void applyControllerProfile(uint8_t index) {
 void resetControllerProfile(uint8_t index) {
   if (index >= kControllerProfileCount) return;
   setDefaultControllerProfile(index);
-  if (activeControllerProfile == index) activeControllerProfile = 0xFF;
   saveAppSettings();
 }
 
@@ -1965,7 +1936,6 @@ void loadAppSettings() {
   }
   activeControllerProfile = preferences.getUChar("activeProf", 0xFF);
   if (activeControllerProfile >= kControllerProfileCount) activeControllerProfile = 0xFF;
-  if (activeControllerProfile != 0xFF && !controllerProfiles[activeControllerProfile].valid) activeControllerProfile = 0xFF;
   const uint8_t storedMotorDataProfileRevision = preferences.getUChar(kMotorDataProfileRevisionKey, 0);
   const uint8_t storedBarGraphProfileRevision = preferences.getUChar(kBarGraphProfileRevisionKey, 0);
   const size_t storedLength = preferences.getBytesLength("uiProfiles");

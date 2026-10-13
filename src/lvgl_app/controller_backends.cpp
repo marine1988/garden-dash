@@ -59,14 +59,13 @@ portMUX_TYPE profileMux = portMUX_INITIALIZER_UNLOCKED;
 volatile uint8_t profileWriteRequestIndex = 0xFF;  // 0xFF means none queued
 VescProfileWriteReport profileWriteReport = {VESC_PROFILE_WRITE_IDLE, 0xFF};
 
-// Steps of an in-flight write. Reading first is what keeps the duty and power
-// limits the controller already has: COMM_SET_MCCONF_TEMP writes every field it
-// carries, so the ones a profile does not own are echoed back unchanged.
+// Steps of an in-flight write. One profile write is one LispBM expression, so the
+// sequence is short: send it, then read the controller back and compare. The
+// report only leaves SENT when the expression is on the wire, and only reaches
+// CONFIRMED when the controller's own numbers agree.
 enum : uint8_t {
   kProfileStepIdle = 0,
-  kProfileStepReadFirst,
-  kProfileStepLimits,
-  kProfileStepFieldWeakening,
+  kProfileStepSend,
   kProfileStepConfirm,
 };
 uint8_t profileStepState = kProfileStepIdle;
@@ -75,9 +74,9 @@ uint8_t profileStepIndex = 0xFF;
 VescProfileTarget profileStepTarget = {};
 
 // The controller restarts LispBM on first use and only takes one REPL command
-// every 0.5 s, so the field-weakening step waits a little over that.
-constexpr uint32_t kProfileLispGapMs = 650;
-constexpr uint32_t kProfileSettleMs = 120;
+// every 0.5 s, so the read-back waits long enough for the expression to have been
+// evaluated before it asks what the controller now holds.
+constexpr uint32_t kProfileSettleMs = 1200;
 // How often the controller's own profile numbers are refreshed for the values
 // page, so it shows what the VESC holds rather than what the display sent.
 constexpr uint32_t kProfileRefreshMs = 3000;
@@ -347,43 +346,24 @@ void vescProfileRefresh() {
   vescLiveProfileValid = true;
 }
 
-// Writes the speed and current limits. The duty and power limits are echoed from
-// the last read-back because this command always writes every field it carries;
-// sending zeros or extremes there would silently widen the controller's envelope.
-void vescProfileSendLimits(const VescProfileTarget &target) {
-  VescProfileValues values = {};
-  values.currentMinScale = target.currentMinScale;
-  values.currentMaxScale = target.currentMaxScale;
-  values.minErpm = target.minErpm;
-  values.maxErpm = target.maxErpm;
-  values.minDuty = vescLiveProfileValid ? vescLiveProfile.minDuty : 0.0F;
-  values.maxDuty = vescLiveProfileValid ? vescLiveProfile.maxDuty : 0.0F;
-  values.wattMin = vescLiveProfileValid ? vescLiveProfile.wattMin : 0.0F;
-  values.wattMax = vescLiveProfileValid ? vescLiveProfile.wattMax : 0.0F;
-  values.includeInCurrent = vescLiveProfileValid;
-  values.inCurrentMin = vescLiveProfile.inCurrentMin;
-  values.inCurrentMax = vescLiveProfile.inCurrentMax;
-
-  uint8_t inner[64];
-  const size_t n = vescBuildMcconfTempPayload(values, inner, sizeof(inner));
-  if (n == 0) return;
-  uint8_t payload[72];
-  const uint8_t wrapped = profileWrapCanForward(inner, n, payload, sizeof(payload));
-  if (wrapped) vescSendPacket(payload, wrapped);
-}
-
-// Sends the field-weakening setting as a LispBM expression: it has no field in
-// COMM_SET_MCCONF_TEMP, and conf-set applies it in RAM without touching flash.
-void vescProfileSendFieldWeakening(uint8_t index) {
+// Writes the whole profile as one LispBM expression. conf-set changes only the
+// fields it names and applies in RAM, so this is the only write a profile makes:
+// nothing goes out on COMM_SET_MCCONF_TEMP, whose every-field semantics would
+// widen the limits a profile does not own.
+void vescProfileSendProfile(uint8_t index, float rpmPerKmh) {
   if (index >= kControllerProfileCount) return;
+  const ControllerProfile &slot = controllerProfiles[index];
   char expression[kVescProfileLispMaxLen];
-  const size_t len = vescProfileLispFieldWeakening(controllerProfiles[index].fieldWeakeningAmps,
-                                                   expression, sizeof(expression));
+  const size_t len = vescProfileLisp(slot.maxSpeedKmh, slot.reverseSpeedKmh, slot.accelPercent,
+                                     slot.brakePercent, slot.fieldWeakeningAmps, slot.motorAmps,
+                                     slot.batteryAmps, rpmPerKmh, expression, sizeof(expression));
   if (len == 0) return;
-  uint8_t inner[64];
+  // The expression is the bulk of the packet: a command id, up to
+  // kVescProfileLispMaxLen characters and a NUL.
+  uint8_t inner[kVescProfileLispMaxLen + 8];
   const size_t n = vescBuildLispPayload(expression, inner, sizeof(inner));
   if (n == 0) return;
-  uint8_t payload[72];
+  uint8_t payload[sizeof(inner) + 8];
   const uint8_t wrapped = profileWrapCanForward(inner, n, payload, sizeof(payload));
   if (wrapped) vescSendPacket(payload, wrapped);
 }
@@ -406,10 +386,10 @@ void vescProfileStep(uint32_t now, float rpmPerKmh) {
 
   if (request != 0xFF && request < kControllerProfileCount) {
     const ControllerProfile &slot = controllerProfiles[request];
-    profileStepTarget = vescProfileTarget(slot.forwardSpeedKmh, slot.reverseSpeedKmh,
-                                          slot.currentMaxScalePercent, slot.currentMinScalePercent, rpmPerKmh);
+    profileStepTarget = vescProfileTarget(slot.maxSpeedKmh, slot.reverseSpeedKmh, slot.accelPercent,
+                                          slot.brakePercent, slot.batteryAmps, rpmPerKmh);
     profileStepIndex = request;
-    profileStepState = kProfileStepReadFirst;
+    profileStepState = kProfileStepSend;
     profileStepDueMs = now;
     vescProfileSetReport(VESC_PROFILE_WRITE_SENT, request);
   }
@@ -424,18 +404,8 @@ void vescProfileStep(uint32_t now, float rpmPerKmh) {
   if ((int32_t)(now - profileStepDueMs) < 0) return;
 
   switch (profileStepState) {
-    case kProfileStepReadFirst:
-      vescProfileRefresh();
-      profileStepState = kProfileStepLimits;
-      profileStepDueMs = now + kProfileSettleMs;
-      break;
-    case kProfileStepLimits:
-      vescProfileSendLimits(profileStepTarget);
-      profileStepState = kProfileStepFieldWeakening;
-      profileStepDueMs = now + kProfileLispGapMs;
-      break;
-    case kProfileStepFieldWeakening:
-      vescProfileSendFieldWeakening(profileStepIndex);
+    case kProfileStepSend:
+      vescProfileSendProfile(profileStepIndex, rpmPerKmh);
       profileStepState = kProfileStepConfirm;
       profileStepDueMs = now + kProfileSettleMs;
       break;

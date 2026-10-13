@@ -52,6 +52,10 @@ static bool previewAppearanceOverride = false;
 static void showDashboard(const fs::path &output, DashboardMode mode, const char *name) {
   uiPreviewSetDashboardMode(mode);
   if (previewAppearanceOverride) dashboardAppearanceMode = previewAppearance;
+  // The dashboard carries the selected ride profile as a badge, so the previews
+  // show one selected: every theme is captured with it in place, which is how a
+  // placement that collides with a theme's own furniture gets caught.
+  applyControllerProfile(0);
   showRestingDashboard();
   DashboardValues values = {};
   getLiveDashboardValues(values);
@@ -868,48 +872,41 @@ int main(int argc, char **argv) {
       if (stopAfterSelected()) return 0;
     }
     if (selected("34_profiles_slots")) {
-      // One filled slot and the rest empty, so the page shows both states.
+      // Eco selected, so the page shows one chosen slot and two waiting ones --
+      // and the dashboard badge has something to name.
       for (uint8_t i = 0; i < kControllerProfileCount; ++i) resetControllerProfile(i);
-      saveControllerProfile(0, "ROAD");
-      activeControllerProfile = 0;
+      applyControllerProfile(0);
       saveAppSettings();
       showSubmenu(output, SUBMENU_PROFILES, 0, false, "34_profiles_slots");
       if (stopAfterSelected()) return 0;
     }
     if (selected("34_profiles_limits")) {
-      // The controller limits page, with a read-back so the CTRL line is drawn:
-      // the numbers the controller reports rather than the ones the slot holds.
+      // The limits page, with a read-back so the CTRL line is drawn: the numbers
+      // the controller reports rather than the ones the slot holds.
       resetControllerProfile(0);
-      controllerProfiles[0].forwardSpeedKmh = 25;
+      controllerProfiles[0].maxSpeedKmh = 25;
       controllerProfiles[0].reverseSpeedKmh = 5;
-      controllerProfiles[0].currentMaxScalePercent = 60;
-      controllerProfiles[0].currentMinScalePercent = 80;
+      controllerProfiles[0].accelPercent = 60;
+      controllerProfiles[0].brakePercent = 80;
       controllerProfiles[0].fieldWeakeningAmps = 10;
-      controllerProfiles[0].valid = true;
+      controllerProfiles[0].motorAmps = 120;
+      controllerProfiles[0].batteryAmps = 30;
       activeControllerProfile = 0;
       vescLiveProfile = {};
       vescLiveProfile.currentMaxScale = 0.6F;
       vescLiveProfile.currentMinScale = 0.8F;
       vescLiveProfile.maxErpm = 1326.0F;
       vescLiveProfile.minErpm = -265.0F;
+      vescLiveProfile.inCurrentMax = 30.0F;
       vescLiveProfileValid = true;
       showSubmenu(output, SUBMENU_PROFILES, 1, false, "34_profiles_limits");
       if (stopAfterSelected()) return 0;
     }
-    if (selected("34_profiles_extras")) {
+    if (selected("34_profiles_apply")) {
       resetControllerProfile(0);
-      saveControllerProfile(0, "ROAD");
-      activeControllerProfile = 0;
+      applyControllerProfile(0);
       saveAppSettings();
-      showSubmenu(output, SUBMENU_PROFILES, 2, false, "34_profiles_extras");
-      if (stopAfterSelected()) return 0;
-    }
-    if (selected("34_profiles_manage")) {
-      resetControllerProfile(0);
-      saveControllerProfile(0, "ROAD");
-      activeControllerProfile = 0;
-      saveAppSettings();
-      showSubmenu(output, SUBMENU_PROFILES, 3, false, "34_profiles_manage");
+      showSubmenu(output, SUBMENU_PROFILES, 2, false, "34_profiles_apply");
       if (stopAfterSelected()) return 0;
     }
 

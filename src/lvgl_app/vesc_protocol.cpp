@@ -207,31 +207,6 @@ float vescReadFloat32Auto(const uint8_t *buf, size_t &index) {
   return ldexpf(sig, exponent);
 }
 
-size_t vescBuildMcconfTempPayload(const VescProfileValues &values, uint8_t *out, size_t cap) {
-  const size_t needed = 5u + 8u * 4u + (values.includeInCurrent ? 2u * 4u : 0u);
-  if (!out || cap < needed) return 0;
-
-  size_t n = 0;
-  out[n++] = VESC_COMM_SET_MCCONF_TEMP;
-  out[n++] = 0;  // store: apply in RAM, never write the controller's flash
-  out[n++] = 0;  // forward over CAN
-  out[n++] = 0;  // ack
-  out[n++] = 0;  // divide by controllers
-  vescAppendFloat32Auto(out, values.currentMinScale, n);
-  vescAppendFloat32Auto(out, values.currentMaxScale, n);
-  vescAppendFloat32Auto(out, values.minErpm, n);
-  vescAppendFloat32Auto(out, values.maxErpm, n);
-  vescAppendFloat32Auto(out, values.minDuty, n);
-  vescAppendFloat32Auto(out, values.maxDuty, n);
-  vescAppendFloat32Auto(out, values.wattMin, n);
-  vescAppendFloat32Auto(out, values.wattMax, n);
-  if (values.includeInCurrent) {
-    vescAppendFloat32Auto(out, values.inCurrentMin, n);
-    vescAppendFloat32Auto(out, values.inCurrentMax, n);
-  }
-  return n;
-}
-
 size_t vescBuildLispPayload(const char *expression, uint8_t *out, size_t cap) {
   if (!expression || !out) return 0;
   const size_t len = strlen(expression);

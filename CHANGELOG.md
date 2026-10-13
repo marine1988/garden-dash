@@ -20,6 +20,10 @@ the 320x240 panel -- or the generator will truncate them and say so. Entries are
 translated the way the rest of the interface is, because a changelog in six
 languages is not worth hand-maintaining.
 
+## 2026-10-13 — Eco, Drive and Sport
+
+Three named profile slots, with a coloured badge on the dashboard.
+
 ## 2026-10-13 — Profiles write to the VESC
 
 Three profiles now set the controller's limits live, and read them back.

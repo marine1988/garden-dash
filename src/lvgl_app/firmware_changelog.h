@@ -17,6 +17,11 @@ struct FirmwareChangelogEntry {
 static const FirmwareChangelogEntry kFirmwareChangelog[] = {
     {
         "2026-10-13",
+        "Eco, Drive and Sport",
+        "Three named profile slots, with a coloured badge on the dashboard.",
+    },
+    {
+        "2026-10-13",
         "Profiles write to the VESC",
         "Three profiles now set the controller's limits live, and read them back.",
     },
@@ -29,11 +34,6 @@ static const FirmwareChangelogEntry kFirmwareChangelog[] = {
         "2026-10-09",
         "Cruise control & profiles",
         "Hold to engage cruise over a VESC link; four profiles store vehicle setups.",
-    },
-    {
-        "2026-10-06",
-        "Battery chemistry",
-        "Battery Configuration is one page, with Li-ion, LiPo, LiFePO4 and editable cell volts.",
     },
 };
 

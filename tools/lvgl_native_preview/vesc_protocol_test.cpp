@@ -260,39 +260,6 @@ void testFloat32Auto() {
   expect(vescReadFloat32Auto(buf, readIndex) == 0.0F, "float32_auto folds NaN to zero");
 }
 
-void testMcconfTempPayload() {
-  VescProfileValues v = {};
-  v.currentMinScale = 0.5F;   // brake scaling
-  v.currentMaxScale = 1.0F;   // drive scaling
-  v.minErpm = -3000.0F;
-  v.maxErpm = 3000.0F;
-  v.minDuty = -1.0F;
-  v.maxDuty = 1.0F;
-  v.wattMin = -10000.0F;
-  v.wattMax = 10000.0F;
-
-  uint8_t payload[64] = {};
-  const size_t n = vescBuildMcconfTempPayload(v, payload, sizeof(payload));
-  expect(n == 37, "MCCONF_TEMP payload is id + four flags + eight floats");
-  expect(payload[0] == VESC_COMM_SET_MCCONF_TEMP, "MCCONF_TEMP command id");
-  expect(payload[1] == 0 && payload[2] == 0 && payload[3] == 0 && payload[4] == 0,
-         "MCCONF_TEMP flags: store off, no CAN forward, no ack, no divide");
-  // store=false is the whole point: the controller's flash must never be written.
-  // Field offsets: currentMinScale at 5, currentMaxScale at 9.
-  const uint8_t minScale[] = {0x3F, 0x00, 0x00, 0x00};
-  const uint8_t maxScale[] = {0x3F, 0x80, 0x00, 0x00};
-  expect(std::memcmp(payload + 5, minScale, 4) == 0, "MCCONF_TEMP brake scale bytes");
-  expect(std::memcmp(payload + 9, maxScale, 4) == 0, "MCCONF_TEMP drive scale bytes");
-
-  v.includeInCurrent = true;
-  v.inCurrentMin = -30.0F;
-  v.inCurrentMax = 30.0F;
-  const size_t withIn = vescBuildMcconfTempPayload(v, payload, sizeof(payload));
-  expect(withIn == n + 8, "MCCONF_TEMP appends battery-current limits when asked");
-
-  expect(vescBuildMcconfTempPayload(v, payload, n + 7) == 0, "MCCONF_TEMP refuses to overflow");
-}
-
 void testLispPayload() {
   const char *expr = "(conf-set 'foc-fw-current-max 10)";
   uint8_t payload[64] = {};
@@ -338,7 +305,6 @@ int main() {
   testFraming();
   testControlFraming();
   testFloat32Auto();
-  testMcconfTempPayload();
   testLispPayload();
   testParseMcconfTemp();
   if (failures == 0) printf("vesc_protocol: all checks passed\n");

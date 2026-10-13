@@ -4817,6 +4817,41 @@ void applyDashboardGradient(lv_obj_t *scr) {
   }
 }
 
+// The selected ride profile as a one-letter badge: green E for Eco, amber D for
+// Drive, red S for Sport. It is not part of any theme's layout, so it is drawn
+// once, after the theme builds. The placement is per-theme because the themes
+// fill the top strip differently: most leave a gap between the clock and the
+// title, the panel-based ones put their furniture elsewhere, and a badge that
+// covers a battery percentage or a panel border is worse than no badge.
+static void buildProfileBadge(lv_obj_t *scr) {
+  if (activeControllerProfile >= kControllerProfileCount) return;  // nothing selected
+  const uint16_t color565 = activeControllerProfile == 0 ? 0x07E0   // green
+                            : activeControllerProfile == 1 ? 0xFFE0  // amber
+                                                           : 0xF800; // red
+  int x = 85, y = 3;  // the gap between the clock and the title
+  switch (dashboardMode) {
+    case MODE_BARS:        x = 201; y = 20; break;  // clear space in the battery panel
+    case MODE_PIXEL_GAUGE: x = 2;   y = 10; break;  // black space left of the pixels
+    case MODE_LARGE_TILES: x = 96;  y = 20; break;  // white space in the speed tile
+    default: break;
+  }
+
+  lv_obj_t *box = lv_obj_create(scr);
+  lv_obj_remove_style_all(box);
+  lv_obj_set_pos(box, x, y);
+  lv_obj_set_size(box, 22, 22);
+  lv_obj_set_style_radius(box, 4, 0);
+  lv_obj_set_style_bg_color(box, dash565(color565), 0);
+  lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+  lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t *label = lv_label_create(box);
+  lv_label_set_text(label, controllerProfileLetter(activeControllerProfile));
+  lv_obj_set_style_text_color(label, lv_color_black(), 0);
+  lv_obj_set_style_text_font(label, &lv_font_rajdhani_16, 0);
+  lv_obj_center(label);
+}
+
 void buildDashboardMode(lv_obj_t *scr, DashboardMode mode, const DashboardValues &values) {
   const bool restoreChrome = uiChromeAccentEnabled();
   setUiChromeAccent(false);
@@ -4875,6 +4910,7 @@ void buildDashboardMode(lv_obj_t *scr, DashboardMode mode, const DashboardValues
       break;
   }
   applyDashboardDataOverrides(mode, values);
+  buildProfileBadge(scr);
   tightenLabelRepaints(scr, firstChild);
   setUiChromeAccent(restoreChrome);
 }
