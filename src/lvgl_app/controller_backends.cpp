@@ -354,9 +354,9 @@ void vescProfileSendProfile(uint8_t index, float rpmPerKmh) {
   if (index >= kControllerProfileCount) return;
   const ControllerProfile &slot = controllerProfiles[index];
   char expression[kVescProfileLispMaxLen];
-  const size_t len = vescProfileLisp(slot.maxSpeedKmh, slot.reverseSpeedKmh, slot.accelPercent,
-                                     slot.brakePercent, slot.fieldWeakeningAmps, slot.motorAmps,
-                                     slot.batteryAmps, rpmPerKmh, expression, sizeof(expression));
+  const size_t len = vescProfileLisp(slot.maxSpeedKmh, slot.accelPercent, slot.brakePercent,
+                                     slot.fieldWeakeningAmps, slot.motorAmps, slot.batteryAmps,
+                                     rpmPerKmh, expression, sizeof(expression));
   if (len == 0) return;
   // The expression is the bulk of the packet: a command id, up to
   // kVescProfileLispMaxLen characters and a NUL.
@@ -386,8 +386,8 @@ void vescProfileStep(uint32_t now, float rpmPerKmh) {
 
   if (request != 0xFF && request < kControllerProfileCount) {
     const ControllerProfile &slot = controllerProfiles[request];
-    profileStepTarget = vescProfileTarget(slot.maxSpeedKmh, slot.reverseSpeedKmh, slot.accelPercent,
-                                          slot.brakePercent, slot.batteryAmps, rpmPerKmh);
+    profileStepTarget = vescProfileTarget(slot.maxSpeedKmh, slot.accelPercent, slot.brakePercent,
+                                          slot.batteryAmps, rpmPerKmh);
     profileStepIndex = request;
     profileStepState = kProfileStepSend;
     profileStepDueMs = now;

@@ -885,7 +885,6 @@ int main(int argc, char **argv) {
       // the controller reports rather than the ones the slot holds.
       resetControllerProfile(0);
       controllerProfiles[0].maxSpeedKmh = 25;
-      controllerProfiles[0].reverseSpeedKmh = 5;
       controllerProfiles[0].accelPercent = 60;
       controllerProfiles[0].brakePercent = 80;
       controllerProfiles[0].fieldWeakeningAmps = 10;

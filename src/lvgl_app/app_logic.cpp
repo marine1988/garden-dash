@@ -1402,8 +1402,8 @@ static ControllerProfile persistedControllerProfiles[kControllerProfileCount] = 
 static bool persistedControllerProfilesKnown = false;
 
 static bool sameControllerProfile(const ControllerProfile &a, const ControllerProfile &b) {
-  return a.maxSpeedKmh == b.maxSpeedKmh && a.reverseSpeedKmh == b.reverseSpeedKmh &&
-         a.accelPercent == b.accelPercent && a.brakePercent == b.brakePercent &&
+  return a.maxSpeedKmh == b.maxSpeedKmh && a.accelPercent == b.accelPercent &&
+         a.brakePercent == b.brakePercent &&
          a.fieldWeakeningAmps == b.fieldWeakeningAmps && a.motorAmps == b.motorAmps &&
          a.batteryAmps == b.batteryAmps;
 }
@@ -1445,15 +1445,15 @@ static void setDefaultControllerProfile(uint8_t index) {
   // controller's own configured currents.
   switch (index) {
     case 0:  // ECO
-      p.maxSpeedKmh = 25; p.reverseSpeedKmh = 5; p.accelPercent = 40; p.brakePercent = 60;
+      p.maxSpeedKmh = 25; p.accelPercent = 40; p.brakePercent = 60;
       p.fieldWeakeningAmps = 0; p.motorAmps = 40; p.batteryAmps = 20;
       break;
     case 1:  // DRIVE
-      p.maxSpeedKmh = 45; p.reverseSpeedKmh = 5; p.accelPercent = 70; p.brakePercent = 80;
+      p.maxSpeedKmh = 45; p.accelPercent = 70; p.brakePercent = 80;
       p.fieldWeakeningAmps = 5; p.motorAmps = 80; p.batteryAmps = 35;
       break;
     default:  // SPORT
-      p.maxSpeedKmh = 100; p.reverseSpeedKmh = 10; p.accelPercent = 100; p.brakePercent = 100;
+      p.maxSpeedKmh = 100; p.accelPercent = 100; p.brakePercent = 100;
       p.fieldWeakeningAmps = 15; p.motorAmps = 150; p.batteryAmps = 60;
       break;
   }

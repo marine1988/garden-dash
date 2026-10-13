@@ -369,8 +369,7 @@ BatteryStats getBatteryStats();
 // the controller's flash: the values go out over LispBM `conf-set`, which lands
 // in RAM.
 struct ControllerProfile {
-  uint16_t maxSpeedKmh;      // forward speed limit
-  uint16_t reverseSpeedKmh;  // reverse (rear) limit
+  uint16_t maxSpeedKmh;      // speed limit
   uint16_t accelPercent;     // motor current scaling, 0..100
   uint16_t brakePercent;     // brake current scaling, 0..100
   uint16_t fieldWeakeningAmps;

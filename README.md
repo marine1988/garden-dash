@@ -125,11 +125,11 @@ settings screen, and the ride replay views.
 - **Cruise control** over a VESC link: hold to engage, and release on a tap,
   braking below the minimum speed, a controller fault or a lost link
 - **Controller profiles**: three named setups -- Eco, Drive and Sport -- holding
-  the forward and reverse speed limits, the acceleration and braking scales, field
-  weakening, and the motor and battery current limits. Applying one writes it to
-  the controller and reads it back to confirm; the dashboard shows the selected
-  profile as a coloured E/D/S badge. Everything is applied in the controller's
-  RAM; its flash is never written
+  the speed limit, the acceleration and braking scales, field weakening, and the
+  motor and battery current limits. Applying one writes it to the controller and
+  reads it back to confirm; the dashboard shows the selected profile as a
+  coloured E/D/S badge. Everything is applied in the controller's RAM; its flash
+  is never written
 - First-boot setup, PIN lock, six languages, metric, imperial and nautical units
 - Works on both CYD panel revisions (ILI9341 and the ST7789-type), detected
   automatically

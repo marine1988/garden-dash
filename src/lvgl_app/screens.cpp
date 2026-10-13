@@ -364,11 +364,10 @@ constexpr int kProfileOptReset = kControllerProfileCount + 1;
 constexpr int kProfileFieldBase = 80;  // + ProfileField
 
 // Everything a profile stores, and everything it writes to the controller. The
-// order is the order the rider reads them in: the two speed limits, then the two
+// order is the order the rider reads them in: the speed limit, then the two
 // current scales, then the three absolute currents.
 enum ProfileField : uint8_t {
   PROFILE_FIELD_MAX_SPEED = 0,
-  PROFILE_FIELD_REVERSE_SPEED,
   PROFILE_FIELD_ACCEL,
   PROFILE_FIELD_BRAKE,
   PROFILE_FIELD_FIELD_WEAKENING,
@@ -387,8 +386,6 @@ static const char *profileFieldTitle(int option) {
   switch (option - kProfileFieldBase) {
     case PROFILE_FIELD_MAX_SPEED:
       return txt("MAX SPEED", "MAX NOPEUS", "MAX-TEMPO", "VITESSE MAX", "VEL. MÁXIMA", "VEL. MASSIMA");
-    case PROFILE_FIELD_REVERSE_SPEED:
-      return txt("REVERSE", "PERUUTUS", "RÜCKWÄRTS", "ARRIÈRE", "ATRÁS", "RETRO");
     case PROFILE_FIELD_ACCEL:
       return txt("ACCEL %", "KIIHTYVYYS %", "BESCHL. %", "ACCÉL. %", "ACEL. %", "ACCEL %");
     case PROFILE_FIELD_BRAKE:
@@ -428,7 +425,6 @@ static void profileFieldValue(int option, char *buffer, size_t size) {
   const ControllerProfile &p = controllerProfiles[slot];
   switch (option - kProfileFieldBase) {
     case PROFILE_FIELD_MAX_SPEED: snprintf(buffer, size, "%u km/h", (unsigned)p.maxSpeedKmh); return;
-    case PROFILE_FIELD_REVERSE_SPEED: snprintf(buffer, size, "%u km/h", (unsigned)p.reverseSpeedKmh); return;
     case PROFILE_FIELD_ACCEL: snprintf(buffer, size, "%u%%", (unsigned)p.accelPercent); return;
     case PROFILE_FIELD_BRAKE: snprintf(buffer, size, "%u%%", (unsigned)p.brakePercent); return;
     case PROFILE_FIELD_FIELD_WEAKENING: snprintf(buffer, size, "%u A", (unsigned)p.fieldWeakeningAmps); return;
@@ -449,7 +445,6 @@ static void profileFieldEditText(int option, char *buffer, size_t size) {
   const ControllerProfile &p = controllerProfiles[slot];
   switch (option - kProfileFieldBase) {
     case PROFILE_FIELD_MAX_SPEED: snprintf(buffer, size, "%u", (unsigned)p.maxSpeedKmh); return;
-    case PROFILE_FIELD_REVERSE_SPEED: snprintf(buffer, size, "%u", (unsigned)p.reverseSpeedKmh); return;
     case PROFILE_FIELD_ACCEL: snprintf(buffer, size, "%u", (unsigned)p.accelPercent); return;
     case PROFILE_FIELD_BRAKE: snprintf(buffer, size, "%u", (unsigned)p.brakePercent); return;
     case PROFILE_FIELD_FIELD_WEAKENING: snprintf(buffer, size, "%u", (unsigned)p.fieldWeakeningAmps); return;
@@ -471,7 +466,6 @@ static void saveProfileInputValue(int option, const char *text) {
   auto clampLong = [](long v, long lo, long hi) { return v < lo ? lo : (v > hi ? hi : v); };
   switch (option - kProfileFieldBase) {
     case PROFILE_FIELD_MAX_SPEED: p.maxSpeedKmh = (uint16_t)clampLong(value, 0, 200); break;
-    case PROFILE_FIELD_REVERSE_SPEED: p.reverseSpeedKmh = (uint16_t)clampLong(value, 0, 100); break;
     case PROFILE_FIELD_ACCEL: p.accelPercent = (uint16_t)clampLong(value, 1, 100); break;
     case PROFILE_FIELD_BRAKE: p.brakePercent = (uint16_t)clampLong(value, 1, 100); break;
     case PROFILE_FIELD_FIELD_WEAKENING:
@@ -6199,8 +6193,7 @@ static void showSubmenu() {
                             "Scegli un profilo, imposta i limiti, applicalo nell'ultima pagina."));
     } else if (profilePage == 1) {
       // One grid: every value a profile stores goes to the controller, so there
-      // is nothing to separate out. Seven tiles take three rows, which is why the
-      // rows are tighter here than on the other pages.
+      // is nothing to separate out. Six tiles take two rows of three.
       for (uint8_t i = 0; i < PROFILE_FIELD_COUNT; ++i) {
         const int option = kProfileFieldBase + i;
         char value[32];
@@ -6212,17 +6205,19 @@ static void showSubmenu() {
                        BTN_OPTION_BASE + option);
       }
       // The controller's own numbers, read back over COMM_GET_MCCONF_TEMP:
-      // labelled CTRL in a language-neutral line, the way a gauge reads.
+      // labelled CTRL in a language-neutral line, the way a gauge reads. Only the
+      // fields a profile owns are shown, so the line cannot report a limit the
+      // profile never set.
       if (vescLiveProfileValid) {
         const float rpmPerKmh = drivetrainRpmPerKmh();
         char ctrl[64];
-        snprintf(ctrl, sizeof(ctrl), "CTRL  F %u  R %u km/h   %u%%",
+        snprintf(ctrl, sizeof(ctrl), "CTRL  %u km/h   %u%%   %u A",
                  (unsigned)vescProfileSpeedFromErpm((int32_t)vescLiveProfile.maxErpm, rpmPerKmh),
-                 (unsigned)vescProfileSpeedFromErpm((int32_t)vescLiveProfile.minErpm, rpmPerKmh),
-                 (unsigned)vescProfileScalePercent(vescLiveProfile.currentMaxScale));
-        makeExplanationAt(scr, 210, ctrl);
+                 (unsigned)vescProfileScalePercent(vescLiveProfile.currentMaxScale),
+                 (unsigned)lroundf(vescLiveProfile.inCurrentMax));
+        makeExplanationAt(scr, 166, ctrl);
       } else {
-        makeExplanationAt(scr, 210,
+        makeExplanationAt(scr, 166,
                           txt("Written to the controller when applied.",
                               "Viedään ohjaimeen käytettäessä.",
                               "Beim Anwenden an den Controller.",

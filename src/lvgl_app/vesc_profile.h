@@ -9,7 +9,7 @@
 // Every profile field is written with a LispBM `conf-set`, the same mechanism
 // the 1zun4/vesc_scooter_support package uses for its speed modes:
 //
-//   l-max-erpm / l-min-erpm   the forward and reverse speed limits
+//   l-max-erpm                the speed limit
 //   l-current-max-scale       acceleration, as a fraction of the controller's
 //                             configured motor current
 //   l-current-min-scale       braking, likewise
@@ -57,32 +57,29 @@ constexpr size_t kVescProfileLispMaxLen = 256;
 struct VescProfileTarget {
   float currentMinScale;
   float currentMaxScale;
-  float minErpm;
   float maxErpm;
   float inCurrentMax;
 };
 
-// Converts a speed limit to the signed ERPM the controller expects. Forward
-// limits are positive and reverse limits negative; `rpmPerKmh` is the conversion
-// factor the telemetry task computes from the wheel, pole pairs, gear ratio and
-// speed calibration. Returns 0 for a non-positive factor, so a limit the display
-// cannot compute is left alone rather than sent as nonsense.
-int32_t vescProfileErpmForSpeed(uint16_t speedKmh, bool reverse, float rpmPerKmh);
+// Converts a speed limit to the ERPM the controller expects. `rpmPerKmh` is the
+// conversion factor the telemetry task computes from the wheel, pole pairs, gear
+// ratio and speed calibration. Returns 0 for a non-positive factor, so a limit
+// the display cannot compute is left alone rather than sent as nonsense.
+int32_t vescProfileErpmForSpeed(uint16_t speedKmh, float rpmPerKmh);
 
 // The single LispBM expression that sets the whole profile, with the values
 // clamped to what a controller accepts. Written into `out`, which must hold at
 // least kVescProfileLispMaxLen bytes. Returns the character count, or 0 when the
-// buffer is too small. A non-positive `rpmPerKmh` leaves the two speed limits out
-// rather than setting them to zero, which would clamp the motor to a standstill.
-size_t vescProfileLisp(uint16_t maxSpeedKmh, uint16_t reverseSpeedKmh, uint16_t accelPercent,
-                       uint16_t brakePercent, uint16_t fieldWeakeningAmps, uint16_t motorAmps,
-                       uint16_t batteryAmps, float rpmPerKmh, char *out, size_t cap);
+// buffer is too small. A non-positive `rpmPerKmh` leaves the speed limit out
+// rather than setting it to zero, which would clamp the motor to a standstill.
+size_t vescProfileLisp(uint16_t maxSpeedKmh, uint16_t accelPercent, uint16_t brakePercent,
+                       uint16_t fieldWeakeningAmps, uint16_t motorAmps, uint16_t batteryAmps,
+                       float rpmPerKmh, char *out, size_t cap);
 
 // The target a profile asks the controller to report back, in the controller's
 // own units. Scale inputs are percentages (0..100).
-VescProfileTarget vescProfileTarget(uint16_t maxSpeedKmh, uint16_t reverseSpeedKmh,
-                                    uint16_t accelPercent, uint16_t brakePercent,
-                                    uint16_t batteryAmps, float rpmPerKmh);
+VescProfileTarget vescProfileTarget(uint16_t maxSpeedKmh, uint16_t accelPercent,
+                                    uint16_t brakePercent, uint16_t batteryAmps, float rpmPerKmh);
 
 // Compares a controller reply against the target. The tolerances absorb the
 // rounding the firmware itself applies (it stores the scales in coarse steps and
