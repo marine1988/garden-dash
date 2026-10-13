@@ -33,6 +33,7 @@ DO_FLASH=1
 DO_MONITOR=0
 DRY_RUN=0
 YES=0
+UPDATE=0
 
 # ── output ───────────────────────────────────────────────────────────────────
 
@@ -67,6 +68,7 @@ Usage:
   scripts/install_macos.sh --no-flash      build only
   scripts/install_macos.sh --port /dev/cu.wchusbserial-1230
   scripts/install_macos.sh --monitor       open the serial monitor after flashing
+  scripts/install_macos.sh --update        git pull the checkout first, then build and flash
   scripts/install_macos.sh --dry-run       print the plan, change nothing
 
 Options:
@@ -75,6 +77,8 @@ Options:
   --repo URL     git remote to clone (default the fork)
   --no-flash     build only
   --monitor      open the serial monitor at 115200 baud after flashing
+  --update       fast-forward the existing checkout before building; skipped when
+                 the checkout has local changes, so it never touches your work
   --dry-run      print the plan without installing, building or flashing
   --yes, -y      do not ask before installing platformio
   -h, --help     this text
@@ -93,6 +97,7 @@ while [ $# -gt 0 ]; do
     --repo=*) REPO="${1#*=}"; shift ;;
     --no-flash) DO_FLASH=0; shift ;;
     --monitor) DO_MONITOR=1; shift ;;
+    --update) UPDATE=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --yes|-y) YES=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -199,6 +204,18 @@ if [ -d "$DIR/.git" ]; then
   step "Using existing checkout at $DIR"
   if [ -n "$(git -C "$DIR" status --porcelain 2>/dev/null)" ]; then
     warn "the checkout has local changes; leaving it as it is"
+    if [ "$UPDATE" -eq 1 ]; then
+      warn "--update skipped: commit or stash the local changes first"
+    fi
+  elif [ "$UPDATE" -eq 1 ]; then
+    # Fast-forward only: never create a merge commit, and never overwrite local
+    # work (the dirty case above already returned).
+    step "Updating the checkout"
+    if run git -C "$DIR" pull --ff-only; then
+      info "now at $(git -C "$DIR" rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+    else
+      warn "git pull failed (diverged, or offline); building the checkout as it is"
+    fi
   fi
 elif [ -e "$DIR" ]; then
   die "$DIR exists but is not a git checkout"
