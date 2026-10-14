@@ -263,6 +263,10 @@ controller and pairs with it.
 
 - The link goes on **CN1** (`GND, IO22, IO27, 3.3V`). The other 4-pin
   connector is only for power. Its `TX`/`RX` pins are the USB serial port.
+- One 4-pin cable can carry all four wires instead: the `garden_usb` build moves
+  the link onto the power header's `TX`/`RX`. It costs the debug log, and the
+  controller has to be unpowered while the USB cable is in. See
+  [One connector instead of two](docs/wiring.md#one-connector-instead-of-two).
 - Leave `3.3V`, `ADC1`, `ADC2` and `PowerSW` unconnected.
 - In VESC Tool, set **App to Use** to `UART` and the baud rate to 115200.
 - Unplug the 5 V lead before connecting USB to the CYD.

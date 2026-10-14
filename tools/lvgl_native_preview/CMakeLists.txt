@@ -176,6 +176,19 @@ if(CYD_BUILD_TESTS OR CYD_BUILD_SIMULATOR)
     COMMAND cyd_preferences_test "${CMAKE_BINARY_DIR}/preferences_test.bin"
   )
 
+  # The VESC link's pins, in both builds: the USB-header build is this source
+  # compiled a second time with the flag set. CYD_LVGL_PREVIEW keeps the log a
+  # no-op, as it is in every other host target.
+  add_executable(cyd_vesc_pins_test vesc_pins_test.cpp)
+  target_include_directories(cyd_vesc_pins_test PRIVATE "${PROJECT_ROOT}/include" "${CMAKE_CURRENT_LIST_DIR}")
+  target_compile_definitions(cyd_vesc_pins_test PRIVATE CYD_LVGL_PREVIEW=1)
+  add_test(NAME cyd_vesc_pins COMMAND cyd_vesc_pins_test)
+
+  add_executable(cyd_vesc_pins_usb_test vesc_pins_test.cpp)
+  target_include_directories(cyd_vesc_pins_usb_test PRIVATE "${PROJECT_ROOT}/include" "${CMAKE_CURRENT_LIST_DIR}")
+  target_compile_definitions(cyd_vesc_pins_usb_test PRIVATE CYD_LVGL_PREVIEW=1 GARDEN_VESC_ON_USB_HEADER=1)
+  add_test(NAME cyd_vesc_pins_usb COMMAND cyd_vesc_pins_usb_test)
+
   add_executable(cyd_gauge_ranges_test gauge_ranges_test.cpp ${HOST_SUPPORT_SOURCES} ${FIRMWARE_SOURCES})
   configure_cyd_host_target(cyd_gauge_ranges_test)
   add_test(NAME cyd_gauge_ranges COMMAND cyd_gauge_ranges_test)

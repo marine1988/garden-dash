@@ -13,6 +13,7 @@
 #include "vesc_protocol.h"
 
 #include <string.h>
+#include "garden_log.h"
 
 namespace {
 
@@ -210,18 +211,18 @@ void updateSetupValues() {
   if (requestSetupValues(setup) && setupValuesAgreeWithPoll(setup)) {
     if (!setupValuesProbed) {
       tripStartDistanceM = setup.distanceAbsM;
-      Serial.println("VESC setup values in use: speed and distance come from the controller");
+      gardenLog("VESC setup values in use: speed and distance come from the controller");
     }
     liveSetup = setup;
     liveSetupValid = true;
     setupValuesSupported = true;
     setupFailures = 0;
   } else if (!setupValuesProbed) {
-    Serial.println("VESC setup values unavailable: falling back to eRPM and wheel size");
+    gardenLog("VESC setup values unavailable: falling back to eRPM and wheel size");
   } else if (++setupFailures >= 10) {
     setupValuesSupported = false;
     liveSetupValid = false;
-    Serial.println("VESC setup values stopped answering: back to eRPM and wheel size");
+    gardenLog("VESC setup values stopped answering: back to eRPM and wheel size");
   }
   setupValuesProbed = true;
 }
@@ -234,7 +235,7 @@ void updateFirmwareVersion(uint32_t now) {
   if (!requestFwVersion(major, minor)) return;
   vescFwMajor = major;
   vescFwMinor = minor;
-  Serial.printf("VESC firmware %u.%02u\n", vescFwMajor, vescFwMinor);
+  gardenLogf("VESC firmware %u.%02u\n", vescFwMajor, vescFwMinor);
 }
 
 void fillVescSample(ControllerSample &out, uint32_t now) {
@@ -474,7 +475,7 @@ ControllerPollResult vescBackendPoll(ControllerSample &out) {
         vescProfileSetReport(VESC_PROFILE_WRITE_FAILED, profileWriteReport.index);
       }
       vescLiveProfileValid = false;
-      Serial.println("VESC telemetry disconnected");
+      gardenLog("VESC telemetry disconnected");
     }
     return CONTROLLER_POLL_NO_SAMPLE;
   }
@@ -500,7 +501,7 @@ ControllerPollResult vescBackendPoll(ControllerSample &out) {
     // wipes them. The rider's chosen profile must be rewritten on the new link.
     if (activeControllerProfile != 0xFF && activeControllerProfile < kControllerProfileCount)
       vescProfileRequestWrite(activeControllerProfile);
-    Serial.println("VESC telemetry connected");
+    gardenLog("VESC telemetry connected");
   }
   vescConnected = true;
   vescLastSuccessMs = now;
@@ -629,7 +630,7 @@ ControllerPollResult farDriverBackendPoll(ControllerSample &out) {
     if (farDriverAnnounced && telemetry.updatedAtMs != 0 && now - telemetry.updatedAtMs > VESC_STALE_AFTER_MS) {
       farDriverAnnounced = false;
       farDriverLastIntegrateMs = 0;
-      Serial.println("FarDriver telemetry lost");
+      gardenLog("FarDriver telemetry lost");
     }
     return CONTROLLER_POLL_NO_SAMPLE;
   }
@@ -682,7 +683,7 @@ ControllerPollResult farDriverBackendPoll(ControllerSample &out) {
 
   if (!farDriverAnnounced) {
     farDriverAnnounced = true;
-    Serial.println("FarDriver telemetry connected");
+    gardenLog("FarDriver telemetry connected");
   }
   return CONTROLLER_POLL_UPDATED;
 }

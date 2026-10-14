@@ -14,6 +14,7 @@
 #   scripts/install_macos.sh --port /dev/cu.wchusbserial-1230
 #   scripts/install_macos.sh --monitor       open the serial monitor after flashing
 #   scripts/install_macos.sh --dry-run       print the plan, change nothing
+#   scripts/install_macos.sh --env garden_usb   VESC link on the power header
 #
 # Written for macOS's stock bash 3.2: no associative arrays, no ${var,,}, no
 # mapfile.
@@ -75,6 +76,8 @@ Usage:
 Options:
   --port DEV     serial device to flash (found automatically otherwise)
   --dir PATH     checkout location (default ./garden-dash)
+  --env NAME     PlatformIO environment to build (default garden; garden_usb
+                 moves the VESC link onto the power header's TX/RX)
   --repo URL     git remote to clone (default the fork)
   --no-flash     build only
   --fake-vesc    flash a spare CYD as a fake VESC for USB testing
@@ -97,6 +100,8 @@ while [ $# -gt 0 ]; do
     --dir=*) DIR="${1#*=}"; DIR_WAS_SET=1; shift ;;
     --repo) REPO="${2:-}"; [ -n "$REPO" ] || die "--repo needs a URL"; shift 2 ;;
     --repo=*) REPO="${1#*=}"; shift ;;
+    --env) ENV_NAME="${2:-}"; [ -n "$ENV_NAME" ] || die "--env needs an environment name"; shift 2 ;;
+    --env=*) ENV_NAME="${1#*=}"; shift ;;
     --no-flash) DO_FLASH=0; shift ;;
     --fake-vesc) DO_FAKE_VESC=1; shift ;;
     --monitor) DO_MONITOR=1; shift ;;

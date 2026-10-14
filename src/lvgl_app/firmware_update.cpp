@@ -2,6 +2,7 @@
 
 #include <esp_ota_ops.h>
 #include <mbedtls/sha256.h>
+#include "garden_log.h"
 
 namespace {
 
@@ -193,7 +194,7 @@ void firmwareUpdateBootValidationBegin() {
   if (!bootValidationPending) return;
   bootValidationStartedMs = millis();
   lastValidationAttemptMs = 0;
-  Serial.println("OTA image pending validation; starting UI health window");
+  gardenLog("OTA image pending validation; starting UI health window");
 }
 
 void firmwareUpdateBootValidationService() {
@@ -205,8 +206,8 @@ void firmwareUpdateBootValidationService() {
   const esp_err_t result = esp_ota_mark_app_valid_cancel_rollback();
   if (result == ESP_OK) {
     bootValidationPending = false;
-    Serial.println("OTA image validated after UI health window");
+    gardenLog("OTA image validated after UI health window");
   } else {
-    Serial.printf("OTA image validation failed: %d\n", result);
+    gardenLogf("OTA image validation failed: %d\n", result);
   }
 }

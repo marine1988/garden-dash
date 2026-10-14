@@ -8,6 +8,7 @@
 
 #ifndef CYD_LVGL_PREVIEW
 #include "controller_backends.h"
+#include "garden_log.h"
 #endif
 
 namespace {
@@ -323,7 +324,7 @@ void performPendingSwitch() {
         attempt++;
       }
       if (attempt == kSwitchQuiesceAttempts)
-        Serial.println("Controller switch: previous backend did not release the radio");
+        gardenLog("Controller switch: previous backend did not release the radio");
     }
     if (previous->stop) previous->stop();
   }
@@ -334,7 +335,7 @@ void performPendingSwitch() {
   portEXIT_CRITICAL(&snapshotMux);
   switchRequested = false;
   controllerManagerResume();
-  Serial.printf("Controller backend switched to %s\n", activeControllerBackend()->name);
+  gardenLogf("Controller backend switched to %s\n", activeControllerBackend()->name);
 }
 
 void performRadioHandover() {
@@ -346,7 +347,7 @@ void performRadioHandover() {
       attempt++;
     }
     if (attempt == kSwitchQuiesceAttempts)
-      Serial.println("Controller setup: active backend did not release the radio");
+      gardenLog("Controller setup: active backend did not release the radio");
   }
   if (active && active->stop) active->stop();
   // A cancel that arrived while this was waiting wins: the next pass resumes.
@@ -506,7 +507,7 @@ void controllerManagerBegin() {
     portENTER_CRITICAL(&snapshotMux);
     sharedSnapshot.link = LINK_WAITING;
     portEXIT_CRITICAL(&snapshotMux);
-    Serial.println("Could not start controller manager task");
+    gardenLog("Could not start controller manager task");
   }
 }
 

@@ -29,11 +29,28 @@ constexpr int TFT_BACKLIGHT_PIN = 21;
 #define CYD_FIRMWARE_VERSION_LABEL CYD_FIRMWARE_VERSION_NAME
 #endif
 
-// VESC UART on the CN1 connector (GND / IO22 / IO27 / 3V3): one JST cable
-// carries the whole link. GPIO16/17 must stay free — on the CYD they are
+// The VESC UART. By default it sits on the CN1 connector (GND / IO22 / IO27 /
+// 3V3), whose pins are free GPIOs, and the USB-serial pair stays free for the
+// debug log. GPIO16/17 must stay free either way — on the CYD they are
 // hard-wired to the RGB LED's green/blue legs and not broken out anywhere.
+//
+// GARDEN_VESC_ON_USB_HEADER moves the link onto the power header's TX/RX
+// (GPIO1/GPIO3) instead, so all four wires — 5V, GND, TX, RX — land on that one
+// connector and a single 4-pin cable carries the whole link. Those are the pins
+// the board's USB-serial chip drives, so in that build the log is compiled out
+// (garden_log.h) and the controller must be unpowered while the USB cable is
+// plugged in, or its transmitter and the chip's push the same line.
+#ifndef GARDEN_VESC_ON_USB_HEADER
+#define GARDEN_VESC_ON_USB_HEADER 0
+#endif
+
+#if GARDEN_VESC_ON_USB_HEADER
+constexpr int VESC_RX_PIN = 3;  // power header: VESC TX -> RX
+constexpr int VESC_TX_PIN = 1;  // power header: VESC RX <- TX
+#else
 constexpr int VESC_RX_PIN = 27;  // CN1: VESC TX -> IO27
 constexpr int VESC_TX_PIN = 22;  // CN1: VESC RX <- IO22
+#endif
 constexpr unsigned long VESC_BAUD = 115200;
 
 // Drivetrain conversion for VESC electrical RPM/tachometer values. Set the

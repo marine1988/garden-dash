@@ -42,6 +42,39 @@ Ground runs in the CN1 bundle rather than beside `VIN`, so the UART pair has its
 return alongside it and there is one ground path instead of a loop between two.
 The display's ~250 mA returns down that same wire.
 
+### One connector instead of two
+
+The default build keeps the link on CN1 and takes power at `VIN`, which needs
+four wires spread over two connectors. If the cable you have ends in a single
+4-pin plug, the `garden_usb` build moves the link onto the power header's
+`TX`/`RX`, so the same four wires land together:
+
+| VESC COMM | CYD   | CYD connector   |
+| --------- | ----- | --------------- |
+| `5V`      | `VIN` | `VIN/TX/RX/GND` |
+| `GND`     | `GND` | `VIN/TX/RX/GND` |
+| `TX/SCL`  | `RX`  | `VIN/TX/RX/GND` |
+| `RX/SDA`  | `TX`  | `VIN/TX/RX/GND` |
+
+Build and flash it with `pio run -e garden_usb -t upload`, or on a Mac with
+`./scripts/install_macos.sh --env garden_usb`. (The Windows `garden.bat` menu
+flashes the default environment.) Two things come with it:
+
+- **The debug log is gone.** Those two pins are the pair the on-board
+  USB-serial chip drives, so the port *is* the link and the log is compiled out
+  rather than printed into it. Flash the plain `garden` build when you want the
+  log back — its link is on CN1, so that one needs wiring there, or it runs with
+  no telemetry.
+- **The controller must be unpowered while the USB cable is in.** With the
+  controller live, its transmitter and the USB-serial chip's both drive the CYD's
+  `RX` line: two push-pull outputs on one node, and the bootloader cannot talk to
+  the PC to flash. Power the scooter down first (the display runs from USB while
+  you flash), or unplug the connector.
+
+The ROM also prints its boot banner on that line at every reset, so the
+controller sees a few bytes of non-protocol traffic before the firmware starts.
+Its framing and CRC checks discard them.
+
 ### Pins to leave unconnected
 
 - `3.3V` at either end — it would fight the CYD's own regulator.

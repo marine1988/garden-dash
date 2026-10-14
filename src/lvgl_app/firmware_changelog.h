@@ -16,6 +16,11 @@ struct FirmwareChangelogEntry {
 
 static const FirmwareChangelogEntry kFirmwareChangelog[] = {
     {
+        "2026-10-14",
+        "VESC link on one connector",
+        "A garden_usb build puts the VESC link on the power header's TX/RX: one cable, no log.",
+    },
+    {
         "2026-10-13",
         "Cruise holds on the scooter",
         "Cruise now drives the controller's own hold over LispBM; braking releases it.",
@@ -29,11 +34,6 @@ static const FirmwareChangelogEntry kFirmwareChangelog[] = {
         "2026-10-13",
         "Eco, Drive and Sport",
         "Three named profile slots, with a coloured badge on the dashboard.",
-    },
-    {
-        "2026-10-13",
-        "Profiles write to the VESC",
-        "Three profiles now set the controller's limits live, and read them back.",
     },
 };
 

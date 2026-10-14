@@ -1081,7 +1081,12 @@ void setup() {
   // backlightOnFromBoot claimed the pin from the global constructor pass,
   // before the Arduino core started. Preserve white through panel bring-up,
   // then fade into the artwork before starting the remaining subsystems.
+  // The debug log's port. In the build that puts the VESC link on the power
+  // header this pair *is* the link, so UART0 stays out of it and garden_log.h
+  // compiles the log away.
+#if !GARDEN_VESC_ON_USB_HEADER
   Serial.begin(115200);
+#endif
 
   // VESC communication settings must be available before the UART starts.
   loadAppSettings();
