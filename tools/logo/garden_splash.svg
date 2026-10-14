@@ -10,6 +10,24 @@
 
   <polygon id="bolt" fill="#ffffff" points="166,35 142,69 155,69 150,95 177,57 162,57"/>
 
+  <polygon id="flag-green" fill="#005347" points="276,6 292,6 292,32 276,32"/>
+
+  <polygon id="flag-red" fill="#bc2828" points="292,6 316,6 316,32 292,32"/>
+
+  <polygon id="flag-armilla" fill="#e7d575" points="306,19 306,22 304,25 302,27 300,29 297,31 294,31 291,31 288,29 286,27 284,25 282,22 282,19 282,16 284,13 286,11 288,9 291,7 294,7 297,7 300,9 302,11 304,13 306,16"/>
+
+  <polygon id="flag-shield" fill="#bc2828" points="287,11 295,11 295,27 287,27"/>
+
+  <polygon id="flag-q1" fill="#ffffff" points="290,12 292,12 292,14 290,14"/>
+
+  <polygon id="flag-q2" fill="#ffffff" points="288,15 290,15 290,17 288,17"/>
+
+  <polygon id="flag-q3" fill="#ffffff" points="291,15 293,15 293,17 291,17"/>
+
+  <polygon id="flag-q4" fill="#ffffff" points="293,15 295,15 295,17 293,17"/>
+
+  <polygon id="flag-q5" fill="#ffffff" points="290,18 292,18 292,20 290,20"/>
+
   <polygon id="letter-g" fill="#ffffff" points="18,109 62,109 62,117 50,117 50,125 62,125 62,137 18,137"/>
 
   <polygon id="g-counter" fill="#000000" points="31,117 49,117 50,119 50,127 49,129 31,129 30,127 30,119"/>
